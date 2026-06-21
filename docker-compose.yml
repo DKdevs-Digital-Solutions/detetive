@@ -3,12 +3,13 @@
 # Você já tem Traefik (provider swarm, resolver letsencrypt). A rede é definida por
 # TRAEFIK_NETWORK (padrão: traefik). Ajuste se a sua rede tiver outro nome.
 #
+# Repositório PÚBLICO (sem token). O container gera o próprio package-lock no boot.
+#
 # Portainer → Stacks → Add stack → Repository:
 #   Repository URL : https://github.com/SEU_USER/detetive-ia.git
-#   Compose path   : stack.detetive.yml   |  Authentication = user + PAT (se o repo for privado)
+#   Compose path   : stack.detetive.yml
 #
 # Environment variables (preencha no Portainer):
-#   GIT_TOKEN  ← PAT do GitHub (só se o repo for privado)
 #   DOMAIN     ← ex.: detetive.seudominio.com.br
 #   ANTHROPIC_API_KEY  ELEVENLABS_API_KEY  ELEVENLABS_VOICE_ID  ELEVENLABS_MODEL_ID
 #   ELEVENLABS_STABILITY ELEVENLABS_SIMILARITY ELEVENLABS_STYLE ELEVENLABS_SPEED
@@ -33,15 +34,16 @@ services:
         set -e
         apk add --no-cache git libc6-compat
         rm -rf /app
-        git clone --depth 1 "https://x-access-token:$$GIT_TOKEN@github.com/SEU_USER/detetive-ia.git" /app
+        git clone --depth 1 https://github.com/DKdevs-Digital-Solutions/detetive.git /app
         cd /app
-        # --include=dev é obrigatório: o build do Next usa devDeps (typescript, tailwind,
-        # postcss) e o NODE_ENV=production faria o npm pulá-las.
-        npm ci --include=dev || npm install --include=dev
+        # Gera o lockfile local (não usa o do repo) e instala com devDeps.
+        # --include=dev é obrigatório: o build do Next usa typescript/tailwind/postcss
+        # e o NODE_ENV=production faria o npm pular as devDependencies.
+        rm -f package-lock.json npm-shrinkwrap.json
+        npm install --include=dev
         npm run build
         exec npm run start
     environment:
-      - GIT_TOKEN=${GIT_TOKEN}
       - NODE_ENV=production
       - PORT=3005
       - TZ=America/Sao_Paulo
