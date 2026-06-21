@@ -59,7 +59,7 @@ services:
     volumes:
       - baileys_data:/data
     networks:
-      - traefik-public
+      - traefik
     deploy:
       # OBRIGATÓRIO 1 réplica: o Baileys mantém UMA sessão de WhatsApp e UM volume.
       # Duas réplicas brigariam pela mesma sessão e corromperiam a autenticação.
