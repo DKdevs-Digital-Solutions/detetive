@@ -30,9 +30,15 @@ services:
       - sh
       - -c
       - |
+        set -e
         apk add --no-cache git libc6-compat
-        rm -rf /app && git clone --depth 1 "https://github.com/DKdevs-Digital-Solutions/detetive.git" /app
-        cd /app && npm ci && npm run build
+        rm -rf /app
+        git clone --depth 1 "https://x-access-token:$$GIT_TOKEN@github.com/SEU_USER/detetive-ia.git" /app
+        cd /app
+        # --include=dev é obrigatório: o build do Next usa devDeps (typescript, tailwind,
+        # postcss) e o NODE_ENV=production faria o npm pulá-las.
+        npm ci --include=dev || npm install --include=dev
+        npm run build
         exec npm run start
     environment:
       - GIT_TOKEN=${GIT_TOKEN}
