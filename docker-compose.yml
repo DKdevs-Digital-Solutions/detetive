@@ -1,0 +1,61 @@
+# Detetive IA — stack para Portainer com Traefik JÁ EM EXECUÇÃO.
+# Build do zero via Dockerfile (npm ci + next build limpos).
+#
+# Portainer → Stacks → Add stack → Repository (aponte para o GitHub),
+# Compose path: docker-compose.yml, e preencha as Environment variables.
+#
+# Ajuste para o SEU Traefik (se os nomes forem diferentes do padrão):
+#   TRAEFIK_NETWORK      (nome da rede externa do Traefik; padrão: traefik)
+#   TRAEFIK_ENTRYPOINT   (entrypoint HTTPS; padrão: websecure)
+#   TRAEFIK_CERTRESOLVER (resolver de certificado; padrão: letsencrypt)
+services:
+  detetive-ia:
+    build: .                       # constrói do zero pela Dockerfile (npm ci + build)
+    container_name: detetive-ia
+    restart: unless-stopped
+    expose:
+      - "3005"                     # interno — o Traefik roteia, não publicar porta
+    environment:
+      NODE_ENV: production
+      PORT: "3005"
+      TZ: America/Sao_Paulo
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID}
+      ELEVENLABS_MODEL_ID: ${ELEVENLABS_MODEL_ID}
+      ELEVENLABS_STABILITY: ${ELEVENLABS_STABILITY}
+      ELEVENLABS_SIMILARITY: ${ELEVENLABS_SIMILARITY}
+      ELEVENLABS_STYLE: ${ELEVENLABS_STYLE}
+      ELEVENLABS_SPEED: ${ELEVENLABS_SPEED}
+      ELEVENLABS_SPEAKER_BOOST: ${ELEVENLABS_SPEAKER_BOOST}
+      ELEVENLABS_OUTPUT_FORMAT: ${ELEVENLABS_OUTPUT_FORMAT}
+      ELEVENLABS_LANGUAGE_CODE: ${ELEVENLABS_LANGUAGE_CODE}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CERT_EVENT_NAME: ${CERT_EVENT_NAME}
+      CERT_ORG_NAME: ${CERT_ORG_NAME}
+    volumes:
+      - baileys_auth:/app/.baileys_auth   # sessão do WhatsApp persiste
+    networks:
+      - traefik
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3005/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.detetive.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.detetive.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.detetive.tls=true"
+      - "traefik.http.routers.detetive.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.detetive.loadbalancer.server.port=3005"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
+
+volumes:
+  baileys_auth:
