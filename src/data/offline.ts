@@ -7,52 +7,52 @@ export const OFFLINE_QA: OfflineEntry[] = [
   {
     keywords: ['ia pode errar', 'você erra', 'sempre certa', 'infalível'],
     answer:
-      'Sim, eu posso errar! Sou uma inteligência artificial e gero respostas baseadas em padrões, não em conhecimento real. Posso apresentar informações erradas com muita confiança — isso se chama "alucinação". Por isso, sempre verifique minhas respostas com fontes confiáveis.',
+      'Sim, eu posso errar. Às vezes gero informações convincentes, mas incorretas. Por isso, confirme respostas importantes em fontes confiáveis.',
   },
   {
     keywords: ['o que é ia', 'o que é inteligência artificial', 'como funciona a ia'],
     answer:
-      'Inteligência Artificial é uma tecnologia que permite máquinas aprenderem e tomarem decisões analisando grandes quantidades de dados. Ela está presente em assistentes de voz, redes sociais, tradutores e muito mais. Quanto mais dados, mais ela aprende — mas isso não a torna perfeita!',
+      'Inteligência artificial identifica padrões em dados para gerar respostas ou tomar decisões. Ela ajuda em muitas tarefas, mas não entende tudo e pode errar.',
   },
   {
     keywords: ['fake news', 'notícia falsa', 'desinformação', 'mentira'],
     answer:
-      'Fake news são informações falsas ou distorcidas espalhadas como se fossem verdadeiras. Para identificá-las: verifique a fonte, veja se tem data e autor, procure a notícia em outros sites confiáveis, e observe se o título tenta causar medo, raiva ou urgência.',
+      'Fake news são informações falsas ou distorcidas apresentadas como verdade. Confira fonte, data e autor, e compare a notícia com veículos confiáveis antes de compartilhar.',
   },
   {
     keywords: ['uso responsável', 'usar ia', 'trabalho escolar', 'escola'],
     answer:
-      'Você pode usar IA para estudar, tirar dúvidas e organizar ideias! Mas é importante: entender o conteúdo (não só copiar), verificar as informações geradas, declarar quando usar IA em trabalhos, e lembrar que a decisão final é sempre sua.',
+      'Use a IA para estudar e organizar ideias, não apenas para copiar. Verifique o conteúdo e informe quando ela foi usada em um trabalho.',
   },
   {
     keywords: ['verificar', 'checar', 'como saber', 'confirmar'],
     answer:
-      'Para verificar uma informação: 1) Verifique a fonte — ela é conhecida e confiável? 2) A notícia tem data e autor? 3) O título parece exagerado? 4) A informação aparece em outros sites confiáveis? 5) A notícia tenta causar medo ou urgência? Se houver dúvida, não compartilhe!',
+      'Confira a fonte, a data, o autor e o tom do título. Depois compare com outros sites confiáveis. Na dúvida, não compartilhe.',
   },
   {
     keywords: ['semáforo', 'verde', 'amarelo', 'vermelho', 'confiança'],
     answer:
-      'O semáforo de confiança indica: VERDE = informação parece consistente e tem fonte clara. AMARELO = informação precisa de mais verificação (falta fonte, data ou contexto). VERMELHO = informação parece falsa, exagerada ou manipulada. Sempre fique atento ao vermelho!',
+      'Verde indica bons sinais de confiança. Amarelo pede mais verificação. Vermelho aponta sinais fortes de informação falsa ou manipulada.',
   },
   {
     keywords: ['quiz', 'perguntas', 'teste'],
     answer:
-      'O quiz do Detetive IA tem 10 perguntas sobre IA, fake news e uso responsável da tecnologia. Você pode acessá-lo pelo menu principal. Ao final, receberá uma pontuação e uma mensagem educativa!',
+      'O quiz tem 10 perguntas sobre IA, fake news e uso responsável. Abra pelo menu principal e teste seus conhecimentos.',
   },
   {
     keywords: ['checklist', 'lista', 'dicas'],
     answer:
-      'O checklist do Detetive IA tem 10 perguntas para ajudar você a verificar qualquer informação. Acesse pelo menu principal e use-o sempre que encontrar uma notícia suspeita!',
+      'O checklist reúne 10 perguntas para verificar notícias. Use-o sempre que encontrar uma informação suspeita.',
   },
   {
     keywords: ['gesto', 'mão', 'câmera', 'webcam'],
     answer:
-      'Você pode controlar o Detetive IA com gestos! Mão aberta = pausar. Joinha para cima = marcar como confiável. Joinha para baixo = marcar como suspeito. Dedo apontando = mais detalhes. Movimento circular = repetir resposta.',
+      'Você pode usar gestos: mão aberta pausa, joinha avalia, dedo apontado pede detalhes e movimento circular repete a resposta.',
   },
   {
     keywords: ['oi', 'olá', 'hey', 'bom dia', 'boa tarde', 'boa noite', 'hello'],
     answer:
-      'Olá! Eu sou o Detetive IA, seu assistente para investigar a verdade! Posso ajudar você a: entender o que é inteligência artificial, verificar se uma notícia parece confiável, aprender sobre fake news, e usar a IA com responsabilidade. Como posso te ajudar hoje?',
+      'Olá! Eu sou o Detetive IA. Posso explicar inteligência artificial, investigar notícias e ensinar como evitar fake news. O que você quer descobrir?',
   },
 ];
 
@@ -170,5 +170,5 @@ export function getOfflineAnswer(question: string): string {
       return entry.answer;
     }
   }
-  return 'Estou em modo offline no momento. Posso te dizer que a inteligência artificial pode errar, que fake news são informações falsas espalhadas como verdadeiras, e que o uso responsável da IA exige verificar as informações geradas. Tente novamente quando a conexão estiver disponível!';
+  return 'Estou offline agora. Ainda posso explicar que a IA pode errar e ajudar você a reconhecer fake news. Faça uma pergunta sobre esses temas.';
 }

@@ -16,6 +16,8 @@ import SettingsMenu from '@/components/ui/SettingsMenu';
 import ScreenSaver from '@/components/ui/ScreenSaver';
 import { useVoiceCommands } from '@/hooks/useVoiceCommands';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
+import { useKioskReceptionSpeech } from '@/hooks/useKioskReceptionSpeech';
+import { PresenceEvent } from '@/hooks/usePresenceDetection';
 import { GameProvider } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
 
@@ -27,8 +29,6 @@ interface CommandFeedback {
 const WELCOME =
   'Olá! Eu sou o Detetive. Bem-vindo à nossa investigação sobre inteligência artificial e fake news. Toque numa opção para começar, ou fale comigo.';
 
-const FAIR_WELCOME =
-  'Olá! Que bom ver você por aqui! Seja muito bem-vindo à nossa Feira de Ciências. Toque na tela para começar a investigação.';
 
 export default function App() {
   return (
@@ -48,6 +48,12 @@ function AppShell() {
     isSpeaking: isWelcomeSpeaking,
     amplitude: welcomeAmplitude,
   } = useElevenLabsSpeech();
+  const {
+    speak: speakReception,
+    stop: stopReception,
+    isSpeaking: isReceptionSpeaking,
+    amplitude: receptionAmplitude,
+  } = useKioskReceptionSpeech();
 
   const [screen, setScreen] = useState<Screen>('home');
   const [isOnline, setIsOnline] = useState(true);
@@ -57,8 +63,6 @@ function AppShell() {
   const [speechBusy, setSpeechBusy] = useState(false);
 
   const welcomePlayedRef = useRef(false);
-  const presenceDetectedRef = useRef(false);
-  const presenceGreetingCompletedRef = useRef(false);
 
   // Estado global de fala: qualquer tela pode bloquear o reconhecimento de ordens
   // enquanto o Detetive estiver lendo ou respondendo.
@@ -93,42 +97,38 @@ function AppShell() {
 
   // ─── Descanso de tela ────────────────────────────────────────────────────────
   const showScreenSaver = useCallback(() => {
+    stopWelcome();
+    stopReception();
     welcomePlayedRef.current = false; // próxima sessão recebe boas-vindas
-    presenceDetectedRef.current = false;
-    presenceGreetingCompletedRef.current = false;
     setScreen('home'); // desmonta câmera/escuta de telas internas antes do modo ocioso
     setSaverOpen(true);
-  }, []);
+  }, [stopReception, stopWelcome]);
 
   const dismissScreenSaver = useCallback(() => {
     stopWelcome();
+    stopReception();
     setSaverOpen(false);
     setScreen('home');
 
-    // O toque libera o áudio no navegador. Se a saudação automática tiver sido
-    // bloqueada, ela é reproduzida agora; caso contrário, não repete a fala.
+    // Se a pessoa tocou sem ter recebido uma fala da recepção, apresenta o
+    // Detetive. Quem já foi cumprimentado ou convidado não ouve texto duplicado.
     setTimeout(() => {
-      if (!sound) return;
-      if (presenceDetectedRef.current && !presenceGreetingCompletedRef.current) {
-        speakWelcome(FAIR_WELCOME, () => {
-          presenceGreetingCompletedRef.current = true;
-          welcomePlayedRef.current = true;
-        });
-        return;
-      }
-      if (!presenceDetectedRef.current) playWelcome();
+      if (sound && !welcomePlayedRef.current) playWelcome();
     }, 300);
-  }, [playWelcome, sound, speakWelcome, stopWelcome]);
+  }, [playWelcome, sound, stopReception, stopWelcome]);
 
-  const handlePresenceDetected = useCallback(() => {
-    presenceDetectedRef.current = true;
-    if (sound && !isWelcomeSpeaking) {
-      speakWelcome(FAIR_WELCOME, () => {
-        presenceGreetingCompletedRef.current = true;
-        welcomePlayedRef.current = true;
-      });
+  const handlePresenceDetected = useCallback((event: PresenceEvent) => {
+    // Quem apenas atravessa recebe somente a saudação visual exibida pelo
+    // ScreenSaver. A voz é reservada para quem para diante do totem.
+    if (event.type === 'passing') return;
+    if (!sound || isWelcomeSpeaking || isReceptionSpeaking) return;
+
+    // O chamariz de participação usa frases fixas e a voz nativa do navegador.
+    // Nenhuma chamada é feita para /api/tts ou para uma IA generativa.
+    if (speakReception('engaged')) {
+      welcomePlayedRef.current = true;
     }
-  }, [sound, isWelcomeSpeaking, speakWelcome]);
+  }, [sound, isReceptionSpeaking, isWelcomeSpeaking, speakReception]);
 
   // Timer de inatividade (configurável; 0 = desligado)
   useEffect(() => {
@@ -182,8 +182,9 @@ function AppShell() {
   // Navega e interrompe as boas-vindas (a pessoa escolheu uma atividade)
   const navigate = useCallback((s: Screen) => {
     stopWelcome();
+    stopReception();
     setScreen(s);
-  }, [stopWelcome]);
+  }, [stopReception, stopWelcome]);
 
   const handleVoiceCommand = useCallback(
     (dest: Screen, recognizedText: string) => {
@@ -265,8 +266,8 @@ function AppShell() {
         open={saverOpen}
         onDismiss={dismissScreenSaver}
         onPresenceDetected={handlePresenceDetected}
-        isGreeting={isWelcomeSpeaking}
-        amplitude={welcomeAmplitude}
+        isGreeting={isWelcomeSpeaking || isReceptionSpeaking}
+        amplitude={isReceptionSpeaking ? receptionAmplitude : welcomeAmplitude}
       />
     </main>
   );

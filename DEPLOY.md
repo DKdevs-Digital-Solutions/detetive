@@ -92,3 +92,16 @@ chromium --kiosk --app=https://SEU_DOMINIO \
 - O `logger` é só em memória — estatísticas zeram ao reiniciar o container (não persistem).
 - Para atualizar: faça `git push` e, no Portainer, **Pull and redeploy** a stack.
 - Quer rodar local sem domínio? Troque o `expose` por `ports: ["3005:3005"]`, remova os labels do Traefik e abra `http://localhost:3005`.
+
+---
+
+## 7. Recepção local sem tokens
+
+A tela de inatividade diferencia automaticamente:
+
+- **passagem rápida:** saudação curta à Feira de Ciências;
+- **pessoa próxima e parada:** convite para participar do Detetive IA.
+
+Esse fluxo usa somente processamento de imagem e voz nativa no navegador. Portanto, não consome caracteres da ElevenLabs nem tokens de IA quando visitantes passam pelo totem.
+
+Para aproximar a zona de convite de 1 metro, posicione a câmera apontada apenas para a frente do equipamento. A regulagem detalhada está em `ALTERACOES-RECEPCAO.md`.

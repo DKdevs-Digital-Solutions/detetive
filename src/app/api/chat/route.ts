@@ -18,7 +18,10 @@ COMO FALAR (sua resposta será LIDA EM VOZ ALTA por um sintetizador neural):
 - Escreva pensando no som: pontuação natural, vírgulas para dar respiração, frases curtas e bem ritmadas.
 - Texto limpo e corrido — JAMAIS use asteriscos, listas, bullets, emojis, markdown ou símbolos. Apenas prosa falada.
 - Comece de forma direta e envolvente, como numa conversa real ao vivo.
-- Seja conciso: no máximo 3 parágrafos curtos.
+- Responda em 1 a 3 frases curtas, normalmente entre 25 e 45 palavras.
+- Nunca ultrapasse 60 palavras, mesmo em perguntas amplas.
+- Dê primeiro a ideia principal. Só apresente exemplos ou detalhes quando forem indispensáveis ou solicitados.
+- Não repita a pergunta e não faça introduções longas.
 
 REGRAS ABSOLUTAS:
 - Responda SEMPRE em português brasileiro.
@@ -35,6 +38,28 @@ TEMAS que você domina:
 - O que são fake news e como identificá-las
 - Como verificar informações e pensar criticamente
 - Como usar IA com responsabilidade`;
+
+function limitForSpeech(text: string, maxSentences = 3, maxWords = 60): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (!clean) return clean;
+
+  const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
+  const selected: string[] = [];
+  let words = 0;
+
+  for (const sentence of sentences.slice(0, maxSentences)) {
+    const count = sentence.trim().split(/\s+/).filter(Boolean).length;
+    if (selected.length > 0 && words + count > maxWords) break;
+    selected.push(sentence.trim());
+    words += count;
+  }
+
+  const result = (selected.length ? selected.join(' ') : clean).trim();
+  const resultWords = result.split(/\s+/).filter(Boolean);
+  if (resultWords.length <= maxWords) return result;
+
+  return `${resultWords.slice(0, maxWords).join(' ').replace(/[,;:]$/, '')}.`;
+}
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -61,13 +86,14 @@ export async function POST(request: NextRequest) {
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
+      max_tokens: 160,
       system: SYSTEM_PROMPT,
       messages,
     });
 
-    const content =
+    const rawContent =
       response.content[0].type === 'text' ? response.content[0].text : '';
+    const content = limitForSpeech(rawContent);
 
     logger.logQuestion();
 

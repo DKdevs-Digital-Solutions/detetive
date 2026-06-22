@@ -11,10 +11,10 @@ JSON esperado:
   "level": "green" | "yellow" | "red",
   "riskLabel": "ALTA CONFIANÇA" | "ATENÇÃO" | "BAIXA CONFIANÇA",
   "title": "Título do diagnóstico em português (máx 60 chars)",
-  "explanation": "Explicação clara em português (2-3 frases)",
-  "suspiciousPoints": ["ponto1", "ponto2"],
-  "positivePoints": ["ponto1"],
-  "recommendation": "Recomendação prática (1-2 frases)"
+  "explanation": "Uma frase clara em português, com no máximo 18 palavras",
+  "suspiciousPoints": ["no máximo dois pontos curtos"],
+  "positivePoints": ["no máximo dois pontos curtos"],
+  "recommendation": "Uma recomendação prática, com no máximo 18 palavras"
 }
 
 CRITÉRIOS DE CLASSIFICAÇÃO:
@@ -22,7 +22,7 @@ CRITÉRIOS DE CLASSIFICAÇÃO:
 - yellow (ATENÇÃO): pode ser verdadeira mas falta fonte, data, autor ou contexto; linguagem levemente tendenciosa; dados imprecisos
 - red (BAIXA CONFIANÇA): sem fonte identificável, linguagem sensacionalista/exagerada, promessas impossíveis, "estudo secreto", induz forte emoção negativa, informação claramente falsa
 
-Seja objetivo e educativo. Sempre mencione o que verificar.`;
+Seja objetivo e educativo. A parte falada inteira deve ser curta e fácil de ouvir. Sempre mencione o que verificar.`;
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
+      max_tokens: 320,
       system: SYSTEM_PROMPT,
       messages: [
         {

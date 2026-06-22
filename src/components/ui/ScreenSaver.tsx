@@ -5,12 +5,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, MotionValue } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import { useGame } from '@/context/GameProvider';
-import { usePresenceDetection } from '@/hooks/usePresenceDetection';
+import { PresenceEvent, PresenceEventType, usePresenceDetection } from '@/hooks/usePresenceDetection';
 
 interface Props {
   open: boolean;
   onDismiss: () => void;
-  onPresenceDetected: () => void;
+  onPresenceDetected: (event: PresenceEvent) => void;
   isGreeting: boolean;
   amplitude: MotionValue<number>;
 }
@@ -53,28 +53,32 @@ export default function ScreenSaver({
 }: Props) {
   const { resetJourney } = useGame();
   const [taglineIdx, setTaglineIdx] = useState(0);
-  const [presenceActive, setPresenceActive] = useState(false);
+  const [presenceMode, setPresenceMode] = useState<PresenceEventType | null>(null);
   const [reactionKey, setReactionKey] = useState(0);
   const [cameraRetry, setCameraRetry] = useState(0);
   const visualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handlePresence = useCallback(() => {
-    setPresenceActive(true);
+  const handlePresence = useCallback((event: PresenceEvent) => {
+    setPresenceMode(event.type);
     setReactionKey((key) => key + 1);
-    onPresenceDetected();
+    onPresenceDetected(event);
     if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
-    visualTimerRef.current = setTimeout(() => setPresenceActive(false), 7500);
+    visualTimerRef.current = setTimeout(
+      () => setPresenceMode(null),
+      event.type === 'engaged' ? 10_000 : 5_500
+    );
   }, [onPresenceDetected]);
 
-  const { status: cameraStatus, message: cameraMessage } = usePresenceDetection({
+  const { status: cameraStatus, message: cameraMessage, activity: cameraActivity } = usePresenceDetection({
     enabled: open,
     onPresence: handlePresence,
     retryKey: cameraRetry,
+    suppressEvents: isGreeting,
   });
 
   useEffect(() => {
     if (!open) {
-      setPresenceActive(false);
+      setPresenceMode(null);
       if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
       return;
     }
@@ -121,7 +125,7 @@ export default function ScreenSaver({
               transition={{ duration: 1.4, repeat: Infinity }}
             />
             <span className="text-xs font-black tracking-[0.24em]" style={{ color: '#dffff4' }}>
-              MODO RECEPÇÃO ATIVO
+              RECEPÇÃO LOCAL · SEM TOKENS
             </span>
           </motion.div>
 
@@ -197,7 +201,7 @@ export default function ScreenSaver({
           ))}
 
           <AnimatePresence>
-            {presenceActive && (
+            {presenceMode && (
               <motion.div
                 className="absolute inset-0 pointer-events-none"
                 initial={{ opacity: 0 }}
@@ -205,7 +209,9 @@ export default function ScreenSaver({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 1.2 }}
                 style={{
-                  background: 'radial-gradient(circle at 50% 48%, rgba(255,77,126,0.24), rgba(0,212,255,0.08) 42%, transparent 72%)',
+                  background: presenceMode === 'engaged'
+                    ? 'radial-gradient(circle at 50% 48%, rgba(0,255,157,0.25), rgba(0,212,255,0.08) 42%, transparent 72%)'
+                    : 'radial-gradient(circle at 50% 48%, rgba(255,77,126,0.24), rgba(0,212,255,0.08) 42%, transparent 72%)',
                 }}
               />
             )}
@@ -234,13 +240,13 @@ export default function ScreenSaver({
                 status={isGreeting ? 'responding' : 'idle'}
                 isSpeaking={isGreeting}
                 amplitude={amplitude}
-                reaction={presenceActive ? 'heart' : null}
+                reaction={presenceMode === 'passing' ? 'heart' : presenceMode === 'engaged' ? 'like' : null}
                 reactionKey={reactionKey}
                 size={260}
               />
 
               <AnimatePresence>
-                {presenceActive && [0, 1, 2, 3, 4].map((heart) => (
+                {presenceMode && [0, 1, 2, 3, 4].map((heart) => (
                   <motion.div
                     key={`welcome-heart-${reactionKey}-${heart}`}
                     className="absolute pointer-events-none"
@@ -250,8 +256,12 @@ export default function ScreenSaver({
                     exit={{ opacity: 0 }}
                     transition={{ duration: 2.4, delay: heart * 0.18, ease: 'easeOut' }}
                   >
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="#ff4d7e">
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill={presenceMode === 'engaged' ? '#00ff9d' : '#ff4d7e'}>
+                      {presenceMode === 'engaged' ? (
+                        <path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2zm7 12l.9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9L19 14z" />
+                      ) : (
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      )}
                     </svg>
                   </motion.div>
                 ))}
@@ -270,20 +280,32 @@ export default function ScreenSaver({
 
               <div className="h-16 mt-3 overflow-hidden flex items-center justify-center">
                 <AnimatePresence mode="wait">
-                  {presenceActive ? (
+                  {presenceMode ? (
                     <motion.div
-                      key="presence-welcome"
+                      key={`presence-${presenceMode}`}
                       initial={{ y: 18, opacity: 0, scale: 0.96 }}
                       animate={{ y: 0, opacity: 1, scale: 1 }}
                       exit={{ y: -18, opacity: 0 }}
                       transition={{ duration: 0.45 }}
                       className="text-center"
                     >
-                      <p className="text-xl font-black" style={{ color: '#ff7aa2', textShadow: '0 0 22px rgba(255,77,126,0.55)' }}>
-                        Olá! Bem-vindo à Feira de Ciências! ❤
+                      <p
+                        className="text-xl font-black"
+                        style={{
+                          color: presenceMode === 'engaged' ? '#62ffc1' : '#ff7aa2',
+                          textShadow: presenceMode === 'engaged'
+                            ? '0 0 22px rgba(0,255,157,0.55)'
+                            : '0 0 22px rgba(255,77,126,0.55)',
+                        }}
+                      >
+                        {presenceMode === 'engaged'
+                          ? 'Ei, investigador! Topa um desafio? 🔎'
+                          : 'Bem-vindo à Feira de Ciências! 👋'}
                       </p>
                       <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        Que bom ter você aqui. Toque na tela para começar.
+                        {presenceMode === 'engaged'
+                          ? 'Descubra se você consegue identificar uma fake news. Toque para participar.'
+                          : 'Aproveite a visita e conheça os projetos da feira.'}
                       </p>
                     </motion.div>
                   ) : (
@@ -318,7 +340,7 @@ export default function ScreenSaver({
               >
                 <path d="M9 11.5V5.5a1.5 1.5 0 0 1 3 0V11M12 11V4.5a1.5 1.5 0 0 1 3 0V11M15 11V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-5.2-3l-1.6-2.8a1.5 1.5 0 0 1 2.4-1.8L9 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </motion.svg>
-              <span className="text-lg font-bold" style={{ color: '#fff' }}>Toque para começar</span>
+              <span className="text-lg font-bold" style={{ color: '#fff' }}>{presenceMode === 'engaged' ? 'Aceitar o desafio' : 'Toque para começar'}</span>
             </motion.div>
           </div>
 
@@ -339,11 +361,21 @@ export default function ScreenSaver({
                 }}
               />
               {cameraStatus === 'active'
-                ? 'CÂMERA ATIVA · APROXIME-SE'
+                ? cameraActivity === 'nearby'
+                  ? 'PESSOA PRÓXIMA · MEDINDO PERMANÊNCIA'
+                  : cameraActivity === 'observing'
+                  ? 'MOVIMENTO DETECTADO · ANALISANDO'
+                  : 'CÂMERA ATIVA · RECEPÇÃO LOCAL'
                 : cameraStatus === 'loading'
                 ? 'PREPARANDO CÂMERA'
                 : 'CÂMERA PRECISA DE ATENÇÃO'}
             </div>
+
+            {cameraStatus === 'active' && (
+              <p className="max-w-xl text-center text-[11px]" style={{ color: 'rgba(190,225,242,0.72)' }}>
+                {cameraMessage}
+              </p>
+            )}
 
             {cameraStatus !== 'active' && cameraStatus !== 'loading' && (
               <div className="flex flex-col items-center gap-2">
@@ -371,7 +403,7 @@ export default function ScreenSaver({
             )}
 
             <div className="text-xs tracking-[0.3em] pointer-events-none" style={{ color: 'rgba(0,212,255,0.32)' }}>
-              FEIRA DE CIÊNCIAS · RECEPÇÃO INTELIGENTE
+              FEIRA DE CIÊNCIAS · VISÃO E VOZ PROCESSADAS LOCALMENTE
             </div>
           </div>
         </motion.div>

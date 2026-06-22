@@ -1,30 +1,83 @@
-# Ajustes do modo de recepção
+# Recepção inteligente local — versão 3
 
-Esta versão pode ser identificada imediatamente pelo selo **MODO RECEPÇÃO ATIVO** no topo da tela inicial de inatividade.
+Esta versão pode ser identificada pelo selo **RECEPÇÃO LOCAL · SEM TOKENS** no topo da tela de inatividade.
 
-## Alterações aplicadas
+## Dois comportamentos diferentes
 
-- O projeto inicia com a tela de inatividade aberta.
-- A câmera é iniciada nessa tela e detecta movimento localmente.
-- Ao detectar a chegada de uma pessoa, o avatar exibe corações, muda o fundo e mostra uma mensagem de boas-vindas à Feira de Ciências.
-- A saudação pode acontecer novamente após o intervalo de segurança, permitindo receber visitantes diferentes.
-- O estado da câmera agora fica visível: ativa, preparando, bloqueada ou incompatível.
-- Há um botão para solicitar novamente a permissão quando ela for negada.
-- Reconhecimento de voz, comandos globais e gestos ficam bloqueados durante qualquer leitura ou resposta.
-- O mecanismo de voz nativo usado no analisador também participa do bloqueio global.
-- O checklist passou a usar uma fila sequencial: introdução, critérios 1 a 10 e encerramento.
-- A introdução não usa mais temporizador fixo e o primeiro critério só começa no término real do áudio.
+### 1. Pessoa passando
 
-## Requisitos da câmera
+Quando uma silhueta atravessa o campo da câmera e sai sem permanecer parada, o sistema mostra corações e reproduz apenas uma saudação curta, por exemplo:
 
-Navegadores permitem câmera apenas em `https://` ou em `http://localhost`. Ao abrir por um IP local usando HTTP, a própria tela mostrará que HTTPS é necessário.
+> Bem-vindo à Feira de Ciências!
 
-## Áudio automático no totem
+A saudação acontece no máximo uma vez a cada 10 segundos para não criar excesso de falas em corredores movimentados.
 
-Para permitir voz antes do primeiro toque no Chromium em modo quiosque, inicie o navegador com:
+### 2. Pessoa parada próxima ao totem
+
+Quando uma pessoa ocupa a região central da câmera, aparenta estar próxima e permanece estável por cerca de 2,6 segundos, o sistema troca para o chamariz de participação:
+
+> Ei, você! Topa investigar uma notícia comigo? Toque na tela e participe do desafio Detetive IA.
+
+O convite muda o visual para verde, exibe brilhos e destaca **Aceitar o desafio**. Um mesmo visitante não recebe o convite repetidamente enquanto continua diante do totem.
+
+## Sem consumo de tokens por visitante
+
+As saudações e os convites:
+
+- são frases fixas com três variações de cada tipo;
+- usam a voz `SpeechSynthesis` instalada no navegador/sistema operacional;
+- não chamam `/api/tts`;
+- não chamam ElevenLabs, Anthropic, OpenAI ou outra IA generativa;
+- não enviam quadros da câmera ao servidor.
+
+A IA e a voz neural continuam disponíveis nas atividades interativas do projeto, mas não são usadas para cumprimentar cada pessoa que passa.
+
+## Como a distância é estimada
+
+Uma webcam comum não mede metros diretamente. O projeto estima proximidade pelo tamanho da silhueta, posição no quadro e estabilidade. Os valores atuais foram preparados para uma pessoa centralizada a aproximadamente 1 metro, mas dependem do campo de visão e da altura da câmera.
+
+Os limiares ficam no arquivo:
+
+```text
+src/hooks/usePresenceDetection.ts
+```
+
+Principais constantes:
+
+```ts
+const NEAR_HEIGHT_RATIO = 0.48;
+const NEAR_WIDTH_RATIO = 0.34;
+const NEAR_FOREGROUND_RATIO = 0.105;
+```
+
+Para exigir que a pessoa chegue mais perto, aumente esses valores. Para reconhecer uma pessoa mais distante, diminua-os em passos pequenos, como `0.02`.
+
+## Instalação recomendada da câmera
+
+- Altura: aproximadamente 1,35 m a 1,65 m.
+- Direção: apontada para o espaço imediatamente à frente do totem.
+- Evite enquadrar televisores, janelas com reflexo ou corredores inteiros.
+- Deixe a frente do totem vazia durante os primeiros segundos de calibração.
+- Use HTTPS ou `localhost`, pois o navegador bloqueia a câmera em HTTP comum.
+
+## Áudio automático no Chromium
+
+Para permitir a fala antes do primeiro toque:
 
 ```bash
 chromium --kiosk --autoplay-policy=no-user-gesture-required https://SEU-ENDERECO
 ```
 
-Sem essa opção, a recepção visual funciona normalmente e a fala bloqueada é repetida depois do primeiro toque.
+No Windows com Chrome:
+
+```text
+chrome.exe --kiosk --app=https://SEU-ENDERECO --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required
+```
+
+## Versão 4 — passagem silenciosa e respostas curtas
+
+- Pessoas que apenas passam recebem saudação visual, sem reprodução de voz.
+- O convite falado permanece somente para quem para diante do totem.
+- O contexto do assistente limita respostas a 1–3 frases e até 60 palavras.
+- O limite de geração foi reduzido para evitar falas cansativas.
+- Respostas do modo offline e o diagnóstico falado do analisador também foram encurtados.
