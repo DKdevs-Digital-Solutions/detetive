@@ -29,6 +29,7 @@ export function useElevenLabsSpeech() {
   const rafRef       = useRef<number | null>(null);
   const cancelledRef = useRef(false);
   const dataRef      = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const utterRef     = useRef<SpeechSynthesisUtterance | null>(null); // evita GC do Chrome
 
   useEffect(() => {
     setIsSupported(
@@ -157,6 +158,7 @@ export function useElevenLabsSpeech() {
           setTimeout(() => speakAt(i + 1), 180);
         };
         u.onerror = () => { stopAmpLoop(); setIsSpeaking(false); onEnd?.(); };
+        utterRef.current = u; // mantém referência viva (bug do Chrome: onend não dispara se a utterance for coletada)
         window.speechSynthesis.speak(u);
       };
       speakAt(0);
