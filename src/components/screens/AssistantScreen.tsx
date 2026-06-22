@@ -83,6 +83,9 @@ export default function AssistantScreen({ onNavigate, onVoiceCommand, isOnline }
   const { isListening, isSupported, interimText, startListening, stopListening } =
     useVoiceRecognition({
       onResult: (text) => {
+        // Ignora qualquer ordem capturada durante análise ou resposta.
+        if (isSpeaking || isLoading || voiceStatus === 'responding' || voiceStatus === 'analyzing') return;
+
         const lower = text.toLowerCase().trim();
 
         for (const { words, screen } of NAV_COMMANDS) {
@@ -106,6 +109,9 @@ export default function AssistantScreen({ onNavigate, onVoiceCommand, isOnline }
   // ─── Gestos ────────────────────────────────────────────────────────────────
   const handleGesture = useCallback(
     (gesture: GestureType) => {
+      // Gestos também não interrompem uma resposta ou leitura em andamento.
+      if (isSpeaking || isLoading || voiceStatus === 'responding' || voiceStatus === 'analyzing') return;
+
       setDetectedGesture(gesture);
       setTimeout(() => setDetectedGesture(null), 1500);
 
@@ -119,7 +125,7 @@ export default function AssistantScreen({ onNavigate, onVoiceCommand, isOnline }
         triggerReaction('like');
       }
     },
-    [messages, speakIfEnabled, stopSpeaking, triggerReaction]
+    [messages, speakIfEnabled, stopSpeaking, triggerReaction, isSpeaking, isLoading, voiceStatus]
   );
 
   const { videoRef, canvasRef, status: gestureStatus, librasSign } = useGestureRecognition({

@@ -34,89 +34,108 @@ export default function ChecklistScreen({ onNavigate }: ChecklistScreenProps) {
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [playing, setPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const [narrationStage, setNarrationStage] = useState<'intro' | 'criteria' | 'closing' | 'done'>('intro');
 
   const playingRef = useRef(false);
+  const runIdRef = useRef(0);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Mantém a versão MAIS RECENTE de speak (evita closure obsoleta nos timers,
-  // quando isSupported ainda era false no 1º render).
+  // Mantém a versão mais recente da função de voz sem reiniciar a sequência.
   const speakRef = useRef(speak);
   useEffect(() => { speakRef.current = speak; }, [speak]);
 
-  const clearTimers = () => {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-  };
-
-  // Selo da jornada: concedido ao avaliar metade ou mais dos critérios
+  // Selo da jornada: concedido ao avaliar metade ou mais dos critérios.
   useEffect(() => {
     if (checked.size >= 5) grantBadge('checklist');
   }, [checked, grantBadge]);
 
-  // ─── Narração automática (marca + lê cada item) ───────────────────────────────
-  // O avanço NÃO depende só do fim da fala: há uma rede de segurança por tempo,
-  // garantindo que o processo rode inteiro a cada sessão mesmo se o TTS engasgar.
-  const playFrom = (i: number) => {
-    if (!playingRef.current) return;
+  const speakAndWait = (text: string, runId: number) =>
+    new Promise<void>((resolve) => {
+      if (!playingRef.current || runId !== runIdRef.current) {
+        resolve();
+        return;
+      }
 
-    if (i >= CHECKLIST_ITEMS.length) {
-      setCurrentIndex(-1);
-      speakRef.current(CLOSING);
-      timersRef.current.push(setTimeout(() => { playingRef.current = false; setPlaying(false); }, 4500));
-      return;
-    }
+      let completed = false;
+      const finish = () => {
+        if (completed) return;
+        completed = true;
+        resolve();
+      };
 
-    const item = CHECKLIST_ITEMS[i];
-    setCurrentIndex(i);
-    setChecked((prev) => {
-      const next = new Set(prev);
-      next.add(item.id);
-      return next;
+      // O próximo trecho só é liberado pelo callback real de término do TTS.
+      // Não existe mais temporizador que possa cortar a introdução ou um item.
+      speakRef.current(text, finish);
     });
-    itemRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    const text = `${item.question} ${item.detail}`;
-    let advanced = false;
-    const advance = () => {
-      if (advanced || !playingRef.current) return;
-      advanced = true;
-      timersRef.current.push(setTimeout(() => playFrom(i + 1), 250));
-    };
-
-    speakRef.current(text, advance);                          // avança ao terminar a fala
-    const safetyMs = Math.min(11000, Math.max(4500, text.length * 95));
-    timersRef.current.push(setTimeout(advance, safetyMs));    // ...ou por tempo, se a fala falhar
-  };
-
-  const startNarration = () => {
-    clearTimers();
+  const startNarration = async () => {
+    const runId = runIdRef.current + 1;
+    runIdRef.current = runId;
     playingRef.current = true;
     setPlaying(true);
     setChecked(new Set());
     setCurrentIndex(-1);
+    setNarrationStage('intro');
     stopSpeaking();
 
-    let begun = false;
-    const begin = () => { if (begun || !playingRef.current) return; begun = true; playFrom(0); };
-    speakRef.current(INTRO, begin);
-    timersRef.current.push(setTimeout(begin, 5000));          // começa mesmo se a intro não falar
+    await speakAndWait(INTRO, runId);
+    if (!playingRef.current || runId !== runIdRef.current) return;
+
+    setNarrationStage('criteria');
+
+    for (let i = 0; i < CHECKLIST_ITEMS.length; i += 1) {
+      if (!playingRef.current || runId !== runIdRef.current) return;
+
+      const item = CHECKLIST_ITEMS[i];
+      setCurrentIndex(i);
+      setChecked((prev) => {
+        const next = new Set(prev);
+        next.add(item.id);
+        return next;
+      });
+      itemRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      await speakAndWait(`${item.question} ${item.detail}`, runId);
+      if (!playingRef.current || runId !== runIdRef.current) return;
+
+      // Pequena pausa visual, sem antecipar ou interromper a voz.
+      await new Promise<void>((resolve) => setTimeout(resolve, 220));
+    }
+
+    if (!playingRef.current || runId !== runIdRef.current) return;
+    setCurrentIndex(-1);
+    setNarrationStage('closing');
+    await speakAndWait(CLOSING, runId);
+
+    if (!playingRef.current || runId !== runIdRef.current) return;
+    playingRef.current = false;
+    setPlaying(false);
+    setNarrationStage('done');
   };
 
   const stopNarration = () => {
-    clearTimers();
+    runIdRef.current += 1;
     playingRef.current = false;
     setPlaying(false);
     setCurrentIndex(-1);
+    setNarrationStage('done');
+    if (startTimerRef.current) {
+      clearTimeout(startTimerRef.current);
+      startTimerRef.current = null;
+    }
     stopSpeaking();
   };
 
-  // Inicia sozinho ao abrir a tela — refaz a cada sessão (a tela remonta a cada visita).
-  // Sem guarda de "já iniciou": o cleanup limpa o timer, então é seguro reagendar
-  // (inclusive no double-effect do React Strict Mode em dev).
+  // Inicia sozinho ao abrir a tela. A introdução é sempre o primeiro áudio.
   useEffect(() => {
-    timersRef.current.push(setTimeout(() => startNarration(), 900));
-    return () => { clearTimers(); playingRef.current = false; stopSpeaking(); };
+    startTimerRef.current = setTimeout(() => { void startNarration(); }, 900);
+    return () => {
+      if (startTimerRef.current) clearTimeout(startTimerRef.current);
+      runIdRef.current += 1;
+      playingRef.current = false;
+      stopSpeaking();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -181,11 +200,15 @@ export default function ChecklistScreen({ onNavigate }: ChecklistScreenProps) {
             {playing ? 'O Detetive está explicando...' : 'Explicação concluída'}
           </p>
           <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-            {currentIndex >= 0
+            {narrationStage === 'intro'
+              ? 'Introdução — ouvindo o texto inicial completo'
+              : currentIndex >= 0
               ? `Critério ${currentIndex + 1} de 10`
-              : playing
-              ? 'Preparando...'
-              : 'O Detetive marcou cada ponto de verificação'}
+              : narrationStage === 'closing'
+              ? 'Conclusão do checklist'
+              : narrationStage === 'done'
+              ? 'O Detetive marcou cada ponto de verificação'
+              : 'Preparando...'}
           </p>
         </div>
       </div>

@@ -19,6 +19,7 @@ export function useVoiceRecognition({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const speechBusyRef = useRef(false);
 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,10 +27,29 @@ export function useVoiceRecognition({
     setIsSupported(!!SR);
   }, []);
 
+  useEffect(() => {
+    const onSpeechStart = () => {
+      speechBusyRef.current = true;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      try { recognitionRef.current?.abort(); } catch {}
+      setIsListening(false);
+      setInterimText('');
+    };
+    const onSpeechEnd = () => {
+      speechBusyRef.current = false;
+    };
+    window.addEventListener('detetive:speech-start', onSpeechStart);
+    window.addEventListener('detetive:speech-end', onSpeechEnd);
+    return () => {
+      window.removeEventListener('detetive:speech-start', onSpeechStart);
+      window.removeEventListener('detetive:speech-end', onSpeechEnd);
+    };
+  }, []);
+
   const startListening = useCallback(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition || speechBusyRef.current) return;
 
     // Cancel any existing recognition
     if (recognitionRef.current) {
@@ -49,6 +69,7 @@ export function useVoiceRecognition({
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
+      if (speechBusyRef.current) return;
       let interim = '';
       let final = '';
 

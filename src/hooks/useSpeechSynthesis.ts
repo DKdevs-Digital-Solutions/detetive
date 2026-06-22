@@ -62,6 +62,17 @@ export function useSpeechSynthesis() {
 
   const activeRef  = useRef(false);
   const pauseRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const globallySpeakingRef = useRef(false);
+  const speechIdRef = useRef(`native-speech-${Math.random().toString(36).slice(2)}`);
+
+  const announceSpeaking = useCallback((active: boolean) => {
+    if (typeof window === 'undefined' || globallySpeakingRef.current === active) return;
+    globallySpeakingRef.current = active;
+    window.dispatchEvent(new CustomEvent(active ? 'detetive:speech-start' : 'detetive:speech-end', {
+      detail: { id: speechIdRef.current },
+    }));
+    if (active) window.dispatchEvent(new Event('detetive:keepalive'));
+  }, []);
 
   useEffect(() => {
     setIsSupported(typeof window !== 'undefined' && 'speechSynthesis' in window);
@@ -73,7 +84,7 @@ export function useSpeechSynthesis() {
 
   const speak = useCallback(
     (text: string, onEnd?: () => void) => {
-      if (!isSupported) { onEnd?.(); return; }
+      if (!isSupported) { announceSpeaking(false); onEnd?.(); return; }
 
       clearPause();
       window.speechSynthesis.cancel();
@@ -82,6 +93,7 @@ export function useSpeechSynthesis() {
       const sentences = splitIntoSentences(text);
       setIsSpeaking(true);
       setIsTalking(false);
+      announceSpeaking(true);
 
       const run = () => {
         if (!activeRef.current) return;
@@ -92,6 +104,7 @@ export function useSpeechSynthesis() {
             setIsSpeaking(false);
             setIsTalking(false);
             activeRef.current = false;
+            announceSpeaking(false);
             onEnd?.();
             return;
           }
@@ -127,6 +140,7 @@ export function useSpeechSynthesis() {
             setIsTalking(false);
             setIsSpeaking(false);
             activeRef.current = false;
+            announceSpeaking(false);
             onEnd?.();
           };
 
@@ -143,7 +157,7 @@ export function useSpeechSynthesis() {
         run();
       }
     },
-    [isSupported]
+    [isSupported, announceSpeaking]
   );
 
   const stop = useCallback(() => {
@@ -153,7 +167,8 @@ export function useSpeechSynthesis() {
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
     setIsTalking(false);
-  }, [isSupported]);
+    announceSpeaking(false);
+  }, [isSupported, announceSpeaking]);
 
   useEffect(() => {
     return () => {
@@ -162,8 +177,9 @@ export function useSpeechSynthesis() {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
+      announceSpeaking(false);
     };
-  }, []);
+  }, [announceSpeaking]);
 
   return { speak, stop, isSpeaking, isTalking, isSupported };
 }

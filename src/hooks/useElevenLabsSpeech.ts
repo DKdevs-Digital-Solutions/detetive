@@ -30,6 +30,17 @@ export function useElevenLabsSpeech() {
   const cancelledRef = useRef(false);
   const dataRef      = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const utterRef     = useRef<SpeechSynthesisUtterance | null>(null); // evita GC do Chrome
+  const globalSpeakingRef = useRef(false);
+  const speechIdRef = useRef(`speech-${Math.random().toString(36).slice(2)}`);
+
+  const announceSpeaking = useCallback((active: boolean) => {
+    if (typeof window === 'undefined' || globalSpeakingRef.current === active) return;
+    globalSpeakingRef.current = active;
+    window.dispatchEvent(new CustomEvent(active ? 'detetive:speech-start' : 'detetive:speech-end', {
+      detail: { id: speechIdRef.current },
+    }));
+    if (active) window.dispatchEvent(new Event('detetive:keepalive'));
+  }, []);
 
   useEffect(() => {
     setIsSupported(
@@ -117,7 +128,7 @@ export function useElevenLabsSpeech() {
   // ─── Fallback: voz do navegador (com amplitude simulada) ──────────────────────
   const speakFallback = useCallback(
     (text: string, onEnd?: () => void) => {
-      if (!('speechSynthesis' in window)) { onEnd?.(); return; }
+      if (!('speechSynthesis' in window)) { announceSpeaking(false); onEnd?.(); return; }
       window.speechSynthesis.cancel();
 
       const sentences = splitIntoSentences(text);
@@ -141,6 +152,7 @@ export function useElevenLabsSpeech() {
         if (cancelledRef.current || i >= sentences.length) {
           stopAmpLoop();
           setIsSpeaking(false);
+          announceSpeaking(false);
           onEnd?.();
           return;
         }
@@ -157,13 +169,13 @@ export function useElevenLabsSpeech() {
           amplitude.set(0);
           setTimeout(() => speakAt(i + 1), 180);
         };
-        u.onerror = () => { stopAmpLoop(); setIsSpeaking(false); onEnd?.(); };
+        u.onerror = () => { stopAmpLoop(); setIsSpeaking(false); announceSpeaking(false); onEnd?.(); };
         utterRef.current = u; // mantém referência viva (bug do Chrome: onend não dispara se a utterance for coletada)
         window.speechSynthesis.speak(u);
       };
       speakAt(0);
     },
-    [amplitude, stopAmpLoop]
+    [amplitude, stopAmpLoop, announceSpeaking]
   );
 
   // ─── API pública ─────────────────────────────────────────────────────────────
@@ -176,7 +188,8 @@ export function useElevenLabsSpeech() {
     }
     stopAmpLoop();
     setIsSpeaking(false);
-  }, [stopAmpLoop]);
+    announceSpeaking(false);
+  }, [stopAmpLoop, announceSpeaking]);
 
   const speak = useCallback(
     async (text: string, onEnd?: () => void) => {
@@ -191,10 +204,18 @@ export function useElevenLabsSpeech() {
       if (!sentences.length) { onEnd?.(); return; }
 
       setIsSpeaking(true);
+      announceSpeaking(true);
 
       const ctx = ensureContext();
       if (ctx.state === 'suspended') {
         try { await ctx.resume(); } catch {}
+        // Em totens sem política de autoplay liberada, tenta a voz nativa,
+        // que possui melhor compatibilidade antes do primeiro toque.
+        if (ctx.state === 'suspended') {
+          setUsingNeural(false);
+          speakFallback(text, onEnd);
+          return;
+        }
       }
 
       // Tenta a primeira sentença na ElevenLabs; se 503 → fallback total
@@ -205,7 +226,7 @@ export function useElevenLabsSpeech() {
         first = null;
       }
 
-      if (cancelledRef.current) { setIsSpeaking(false); return; }
+      if (cancelledRef.current) { setIsSpeaking(false); announceSpeaking(false); return; }
 
       if (first === 'no-neural' || first === null) {
         setUsingNeural(false);
@@ -246,9 +267,10 @@ export function useElevenLabsSpeech() {
 
       stopAmpLoop();
       setIsSpeaking(false);
+      announceSpeaking(false);
       if (!cancelledRef.current) onEnd?.();
     },
-    [isSupported, ensureContext, fetchAudio, playBuffer, startAmpLoop, stopAmpLoop, speakFallback, amplitude]
+    [isSupported, ensureContext, fetchAudio, playBuffer, startAmpLoop, stopAmpLoop, speakFallback, amplitude, announceSpeaking]
   );
 
   useEffect(() => {
@@ -259,9 +281,10 @@ export function useElevenLabsSpeech() {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
+      announceSpeaking(false);
       try { ctxRef.current?.close(); } catch {}
     };
-  }, []);
+  }, [announceSpeaking]);
 
   return { speak, stop, isSpeaking, amplitude: amplitude as MotionValue<number>, isSupported, usingNeural };
 }

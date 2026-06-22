@@ -27,6 +27,9 @@ interface CommandFeedback {
 const WELCOME =
   'Olá! Eu sou o Detetive. Bem-vindo à nossa investigação sobre inteligência artificial e fake news. Toque numa opção para começar, ou fale comigo.';
 
+const FAIR_WELCOME =
+  'Olá! Que bom ver você por aqui! Seja muito bem-vindo à nossa Feira de Ciências. Toque na tela para começar a investigação.';
+
 export default function App() {
   return (
     <SettingsProvider>
@@ -39,15 +42,47 @@ export default function App() {
 
 function AppShell() {
   const { idleSeconds, sound } = useSettings();
-  const { speak: speakWelcome, stop: stopWelcome } = useElevenLabsSpeech();
+  const {
+    speak: speakWelcome,
+    stop: stopWelcome,
+    isSpeaking: isWelcomeSpeaking,
+    amplitude: welcomeAmplitude,
+  } = useElevenLabsSpeech();
 
   const [screen, setScreen] = useState<Screen>('home');
   const [isOnline, setIsOnline] = useState(true);
   const [commandFeedback, setCommandFeedback] = useState<CommandFeedback | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [saverOpen, setSaverOpen] = useState(false);
+  const [saverOpen, setSaverOpen] = useState(true);
+  const [speechBusy, setSpeechBusy] = useState(false);
 
   const welcomePlayedRef = useRef(false);
+  const presenceDetectedRef = useRef(false);
+  const presenceGreetingCompletedRef = useRef(false);
+
+  // Estado global de fala: qualquer tela pode bloquear o reconhecimento de ordens
+  // enquanto o Detetive estiver lendo ou respondendo.
+  useEffect(() => {
+    const activeSpeech = new Set<string>();
+    const update = () => setSpeechBusy(activeSpeech.size > 0);
+    const onStart = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id || 'unknown';
+      activeSpeech.add(id);
+      update();
+    };
+    const onEnd = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id || 'unknown';
+      activeSpeech.delete(id);
+      update();
+    };
+
+    window.addEventListener('detetive:speech-start', onStart);
+    window.addEventListener('detetive:speech-end', onEnd);
+    return () => {
+      window.removeEventListener('detetive:speech-start', onStart);
+      window.removeEventListener('detetive:speech-end', onEnd);
+    };
+  }, []);
 
   // ─── Boas-vindas (início de cada sessão) ─────────────────────────────────────
   const playWelcome = useCallback(() => {
@@ -56,28 +91,48 @@ function AppShell() {
     speakWelcome(WELCOME);
   }, [sound, speakWelcome]);
 
-  // 1ª interação após carregar libera o áudio e dá as boas-vindas da 1ª sessão
-  useEffect(() => {
-    const once = () => { playWelcome(); window.removeEventListener('pointerdown', once); };
-    window.addEventListener('pointerdown', once);
-    return () => window.removeEventListener('pointerdown', once);
-  }, [playWelcome]);
-
   // ─── Descanso de tela ────────────────────────────────────────────────────────
   const showScreenSaver = useCallback(() => {
     welcomePlayedRef.current = false; // próxima sessão recebe boas-vindas
+    presenceDetectedRef.current = false;
+    presenceGreetingCompletedRef.current = false;
+    setScreen('home'); // desmonta câmera/escuta de telas internas antes do modo ocioso
     setSaverOpen(true);
   }, []);
 
   const dismissScreenSaver = useCallback(() => {
+    stopWelcome();
     setSaverOpen(false);
     setScreen('home');
-    setTimeout(() => playWelcome(), 400); // o toque liberou o áudio
-  }, [playWelcome]);
+
+    // O toque libera o áudio no navegador. Se a saudação automática tiver sido
+    // bloqueada, ela é reproduzida agora; caso contrário, não repete a fala.
+    setTimeout(() => {
+      if (!sound) return;
+      if (presenceDetectedRef.current && !presenceGreetingCompletedRef.current) {
+        speakWelcome(FAIR_WELCOME, () => {
+          presenceGreetingCompletedRef.current = true;
+          welcomePlayedRef.current = true;
+        });
+        return;
+      }
+      if (!presenceDetectedRef.current) playWelcome();
+    }, 300);
+  }, [playWelcome, sound, speakWelcome, stopWelcome]);
+
+  const handlePresenceDetected = useCallback(() => {
+    presenceDetectedRef.current = true;
+    if (sound && !isWelcomeSpeaking) {
+      speakWelcome(FAIR_WELCOME, () => {
+        presenceGreetingCompletedRef.current = true;
+        welcomePlayedRef.current = true;
+      });
+    }
+  }, [sound, isWelcomeSpeaking, speakWelcome]);
 
   // Timer de inatividade (configurável; 0 = desligado)
   useEffect(() => {
-    if (!idleSeconds || idleSeconds <= 0) return;
+    if (!idleSeconds || idleSeconds <= 0 || saverOpen || speechBusy) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const reset = () => {
       if (timer) clearTimeout(timer);
@@ -85,21 +140,24 @@ function AppShell() {
     };
     const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart', 'mousemove'];
     events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    // Mantém acordado durante atividades autônomas (ex.: o Detetive lendo o checklist)
+    window.addEventListener('detetive:keepalive', reset);
     reset();
     return () => {
       if (timer) clearTimeout(timer);
       events.forEach((e) => window.removeEventListener(e, reset));
+      window.removeEventListener('detetive:keepalive', reset);
     };
-  }, [idleSeconds, showScreenSaver]);
+  }, [idleSeconds, showScreenSaver, saverOpen, speechBusy]);
 
   // Esc volta ao início (navegação)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setScreen('home');
+      if (e.key === 'Escape' && !speechBusy && !saverOpen) setScreen('home');
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [speechBusy, saverOpen]);
 
   // Online/offline
   useEffect(() => {
@@ -129,6 +187,7 @@ function AppShell() {
 
   const handleVoiceCommand = useCallback(
     (dest: Screen, recognizedText: string) => {
+      if (speechBusy || saverOpen) return;
       setCommandFeedback({ screen: dest, text: recognizedText });
       setTimeout(() => {
         setCommandFeedback(null);
@@ -136,10 +195,10 @@ function AppShell() {
         setScreen(dest);
       }, 1500);
     },
-    [stopWelcome]
+    [stopWelcome, speechBusy, saverOpen]
   );
 
-  useVoiceCommands(handleVoiceCommand, screen !== 'assistant');
+  useVoiceCommands(handleVoiceCommand, screen !== 'assistant' && !saverOpen && !speechBusy);
 
   const renderScreen = () => {
     switch (screen) {
@@ -202,7 +261,13 @@ function AppShell() {
       <SettingsMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={navigate} />
 
       {/* Descanso de tela (inatividade) */}
-      <ScreenSaver open={saverOpen} onDismiss={dismissScreenSaver} />
+      <ScreenSaver
+        open={saverOpen}
+        onDismiss={dismissScreenSaver}
+        onPresenceDetected={handlePresenceDetected}
+        isGreeting={isWelcomeSpeaking}
+        amplitude={welcomeAmplitude}
+      />
     </main>
   );
 }

@@ -1,14 +1,18 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence, MotionValue } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import { useGame } from '@/context/GameProvider';
+import { usePresenceDetection } from '@/hooks/usePresenceDetection';
 
 interface Props {
   open: boolean;
   onDismiss: () => void;
+  onPresenceDetected: () => void;
+  isGreeting: boolean;
+  amplitude: MotionValue<number>;
 }
 
 const TAGLINES = [
@@ -40,15 +44,47 @@ const LINKS: [number, number][] = [
   [7, 8], [8, 9], [9, 10], [10, 11], [11, 5], [6, 10], [2, 5], [1, 7],
 ];
 
-export default function ScreenSaver({ open, onDismiss }: Props) {
+export default function ScreenSaver({
+  open,
+  onDismiss,
+  onPresenceDetected,
+  isGreeting,
+  amplitude,
+}: Props) {
   const { resetJourney } = useGame();
   const [taglineIdx, setTaglineIdx] = useState(0);
+  const [presenceActive, setPresenceActive] = useState(false);
+  const [reactionKey, setReactionKey] = useState(0);
+  const [cameraRetry, setCameraRetry] = useState(0);
+  const visualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handlePresence = useCallback(() => {
+    setPresenceActive(true);
+    setReactionKey((key) => key + 1);
+    onPresenceDetected();
+    if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
+    visualTimerRef.current = setTimeout(() => setPresenceActive(false), 7500);
+  }, [onPresenceDetected]);
+
+  const { status: cameraStatus, message: cameraMessage } = usePresenceDetection({
+    enabled: open,
+    onPresence: handlePresence,
+    retryKey: cameraRetry,
+  });
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPresenceActive(false);
+      if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
+      return;
+    }
     const t = setInterval(() => setTaglineIdx((i) => (i + 1) % TAGLINES.length), 3800);
     return () => clearInterval(t);
   }, [open]);
+
+  useEffect(() => () => {
+    if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
+  }, []);
 
   const dismiss = () => {
     resetJourney(); // novo visitante começa do zero
@@ -67,6 +103,28 @@ export default function ScreenSaver({ open, onDismiss }: Props) {
           style={{ background: 'var(--bg-primary)' }}
           onPointerDown={(e) => { e.stopPropagation(); dismiss(); }}
         >
+          {/* Identificação evidente do novo fluxo de recepção */}
+          <motion.div
+            className="absolute top-7 z-20 flex items-center gap-3 px-5 py-2.5 rounded-full pointer-events-none"
+            style={{
+              background: 'rgba(0,20,40,0.86)',
+              border: '1px solid rgba(0,255,157,0.55)',
+              boxShadow: '0 0 28px rgba(0,255,157,0.18)',
+            }}
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <motion.span
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ background: '#00ff9d' }}
+              animate={{ opacity: [0.35, 1, 0.35], scale: [0.85, 1.25, 0.85] }}
+              transition={{ duration: 1.4, repeat: Infinity }}
+            />
+            <span className="text-xs font-black tracking-[0.24em]" style={{ color: '#dffff4' }}>
+              MODO RECEPÇÃO ATIVO
+            </span>
+          </motion.div>
+
           {/* Grade de fundo */}
           <div
             className="absolute inset-0 opacity-[0.06] pointer-events-none"
@@ -138,6 +196,21 @@ export default function ScreenSaver({ open, onDismiss }: Props) {
             </motion.span>
           ))}
 
+          <AnimatePresence>
+            {presenceActive && (
+              <motion.div
+                className="absolute inset-0 pointer-events-none"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 0.75, 0.28] }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.2 }}
+                style={{
+                  background: 'radial-gradient(circle at 50% 48%, rgba(255,77,126,0.24), rgba(0,212,255,0.08) 42%, transparent 72%)',
+                }}
+              />
+            )}
+          </AnimatePresence>
+
           {/* Núcleo central do Detetive */}
           <div className="relative z-10 flex flex-col items-center gap-5">
             <motion.div
@@ -156,7 +229,34 @@ export default function ScreenSaver({ open, onDismiss }: Props) {
               />
             </motion.div>
 
-            <Avatar status="idle" size={260} />
+            <div className="relative">
+              <Avatar
+                status={isGreeting ? 'responding' : 'idle'}
+                isSpeaking={isGreeting}
+                amplitude={amplitude}
+                reaction={presenceActive ? 'heart' : null}
+                reactionKey={reactionKey}
+                size={260}
+              />
+
+              <AnimatePresence>
+                {presenceActive && [0, 1, 2, 3, 4].map((heart) => (
+                  <motion.div
+                    key={`welcome-heart-${reactionKey}-${heart}`}
+                    className="absolute pointer-events-none"
+                    style={{ left: `${12 + heart * 19}%`, top: '52%' }}
+                    initial={{ opacity: 0, scale: 0.4, y: 10 }}
+                    animate={{ opacity: [0, 1, 0], scale: [0.4, 1.15, 0.85], y: -120 - heart * 12 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 2.4, delay: heart * 0.18, ease: 'easeOut' }}
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="#ff4d7e">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
 
             <div className="text-center">
               <motion.h1
@@ -168,19 +268,37 @@ export default function ScreenSaver({ open, onDismiss }: Props) {
                 DETETIVE <span style={{ color: '#ffffff' }}>IA</span>
               </motion.h1>
 
-              <div className="h-7 mt-3 overflow-hidden">
-                <AnimatePresence mode="popLayout">
-                  <motion.p
-                    key={taglineIdx}
-                    initial={{ y: 22, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: -22, opacity: 0 }}
-                    transition={{ duration: 0.5 }}
-                    className="text-base font-medium"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {TAGLINES[taglineIdx]}
-                  </motion.p>
+              <div className="h-16 mt-3 overflow-hidden flex items-center justify-center">
+                <AnimatePresence mode="wait">
+                  {presenceActive ? (
+                    <motion.div
+                      key="presence-welcome"
+                      initial={{ y: 18, opacity: 0, scale: 0.96 }}
+                      animate={{ y: 0, opacity: 1, scale: 1 }}
+                      exit={{ y: -18, opacity: 0 }}
+                      transition={{ duration: 0.45 }}
+                      className="text-center"
+                    >
+                      <p className="text-xl font-black" style={{ color: '#ff7aa2', textShadow: '0 0 22px rgba(255,77,126,0.55)' }}>
+                        Olá! Bem-vindo à Feira de Ciências! ❤
+                      </p>
+                      <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                        Que bom ter você aqui. Toque na tela para começar.
+                      </p>
+                    </motion.div>
+                  ) : (
+                    <motion.p
+                      key={taglineIdx}
+                      initial={{ y: 22, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -22, opacity: 0 }}
+                      transition={{ duration: 0.5 }}
+                      className="text-base font-medium"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {TAGLINES[taglineIdx]}
+                    </motion.p>
+                  )}
                 </AnimatePresence>
               </div>
             </div>
@@ -204,9 +322,57 @@ export default function ScreenSaver({ open, onDismiss }: Props) {
             </motion.div>
           </div>
 
-          {/* Marca d'água inferior */}
-          <div className="absolute bottom-6 text-xs tracking-[0.3em] pointer-events-none" style={{ color: 'rgba(0,212,255,0.3)' }}>
-            FEIRA DE CIÊNCIAS
+          {/* Estado da câmera: visível para facilitar a instalação no totem */}
+          <div className="absolute bottom-5 z-20 flex flex-col items-center gap-2">
+            <div
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-bold tracking-[0.16em]"
+              style={{
+                color: cameraStatus === 'active' ? '#b9ffe4' : '#ffe0a6',
+                background: 'rgba(0,12,26,0.82)',
+                border: `1px solid ${cameraStatus === 'active' ? 'rgba(0,221,136,0.38)' : 'rgba(255,170,0,0.42)'}`,
+              }}
+            >
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{
+                  background: cameraStatus === 'active' ? '#00dd88' : cameraStatus === 'loading' ? '#00d4ff' : '#ffaa00',
+                }}
+              />
+              {cameraStatus === 'active'
+                ? 'CÂMERA ATIVA · APROXIME-SE'
+                : cameraStatus === 'loading'
+                ? 'PREPARANDO CÂMERA'
+                : 'CÂMERA PRECISA DE ATENÇÃO'}
+            </div>
+
+            {cameraStatus !== 'active' && cameraStatus !== 'loading' && (
+              <div className="flex flex-col items-center gap-2">
+                <p className="max-w-lg text-center text-xs" style={{ color: 'rgba(255,225,175,0.88)' }}>
+                  {cameraMessage}
+                </p>
+                {(cameraStatus === 'blocked' || cameraStatus === 'error') && (
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-full text-xs font-bold"
+                    style={{
+                      color: '#07131f',
+                      background: '#ffaa00',
+                      boxShadow: '0 0 20px rgba(255,170,0,0.25)',
+                    }}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      setCameraRetry((value) => value + 1);
+                    }}
+                  >
+                    Autorizar câmera novamente
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="text-xs tracking-[0.3em] pointer-events-none" style={{ color: 'rgba(0,212,255,0.32)' }}>
+              FEIRA DE CIÊNCIAS · RECEPÇÃO INTELIGENTE
+            </div>
           </div>
         </motion.div>
       )}

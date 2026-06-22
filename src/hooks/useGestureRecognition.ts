@@ -87,12 +87,24 @@ export function useGestureRecognition({ onGesture, enabled, librasMode = false }
   const librasHistoryRef = useRef<MotionPoint[]>([]);
   const librasLastRef = useRef<string | null>(null);
   const librasStableRef = useRef(0);
+  const speechBusyRef = useRef(false);
 
   useEffect(() => { librasModeRef.current = librasMode; }, [librasMode]);
 
+  useEffect(() => {
+    const onSpeechStart = () => { speechBusyRef.current = true; };
+    const onSpeechEnd = () => { speechBusyRef.current = false; };
+    window.addEventListener('detetive:speech-start', onSpeechStart);
+    window.addEventListener('detetive:speech-end', onSpeechEnd);
+    return () => {
+      window.removeEventListener('detetive:speech-start', onSpeechStart);
+      window.removeEventListener('detetive:speech-end', onSpeechEnd);
+    };
+  }, []);
+
   const emitGesture = useCallback(
     (gesture: GestureType) => {
-      if (gesture === lastGestureRef.current) return;
+      if (speechBusyRef.current || gesture === lastGestureRef.current) return;
       lastGestureRef.current = gesture;
       if (gesture) {
         if (debounceRef.current) clearTimeout(debounceRef.current);

@@ -22,10 +22,27 @@ export function useVoiceCommands(
   const recRef      = useRef<any>(null);
   const enabledRef  = useRef(enabled);
   const stoppedRef  = useRef(false);
+  const speechBusyRef = useRef(false);
 
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
+
+  useEffect(() => {
+    const onSpeechStart = () => {
+      speechBusyRef.current = true;
+      try { recRef.current?.abort(); } catch {}
+    };
+    const onSpeechEnd = () => {
+      speechBusyRef.current = false;
+    };
+    window.addEventListener('detetive:speech-start', onSpeechStart);
+    window.addEventListener('detetive:speech-end', onSpeechEnd);
+    return () => {
+      window.removeEventListener('detetive:speech-start', onSpeechStart);
+      window.removeEventListener('detetive:speech-end', onSpeechEnd);
+    };
+  }, []);
 
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return;
@@ -36,7 +53,7 @@ export function useVoiceCommands(
     stoppedRef.current = false;
 
     const start = () => {
-      if (stoppedRef.current || !enabledRef.current) return;
+      if (stoppedRef.current || !enabledRef.current || speechBusyRef.current) return;
 
       const rec = new SR();
       rec.lang = 'pt-BR';
@@ -54,7 +71,7 @@ export function useVoiceCommands(
       }
 
       rec.onresult = (event: any) => {
-        if (!enabledRef.current) return;
+        if (!enabledRef.current || speechBusyRef.current) return;
         // Usa o resultado de maior confiança
         const result = event.results[0];
         let text = '';
@@ -79,7 +96,7 @@ export function useVoiceCommands(
       };
 
       rec.onend = () => {
-        if (!stoppedRef.current && enabledRef.current) {
+        if (!stoppedRef.current && enabledRef.current && !speechBusyRef.current) {
           setTimeout(() => start(), 400);
         }
       };
