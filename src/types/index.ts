@@ -14,15 +14,6 @@ export type VoiceStatus = 'idle' | 'listening' | 'analyzing' | 'responding';
 
 export type ConfidenceLevel = 'green' | 'yellow' | 'red';
 
-export type GestureType =
-  | 'open_hand'
-  | 'thumbs_up'
-  | 'thumbs_down'
-  | 'pointing_up'
-  | 'circular'
-  | 'two_hands'
-  | null;
-
 export interface Message {
   id: string;
   role: 'user' | 'assistant';

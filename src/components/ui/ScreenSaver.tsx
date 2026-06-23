@@ -1,18 +1,14 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence, MotionValue } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Avatar from '@/components/ui/Avatar';
 import { useGame } from '@/context/GameProvider';
-import { PresenceEvent, PresenceEventType, usePresenceDetection } from '@/hooks/usePresenceDetection';
 
 interface Props {
   open: boolean;
   onDismiss: () => void;
-  onPresenceDetected: (event: PresenceEvent) => void;
-  isGreeting: boolean;
-  amplitude: MotionValue<number>;
 }
 
 const TAGLINES = [
@@ -22,18 +18,18 @@ const TAGLINES = [
   'Tecnologia para investigar o que é real.',
 ];
 
-// Palavras temáticas que flutuam ao fundo
+// Palavras temáticas, fixas ao fundo (sem animação — leve para GPUs antigas)
 const KEYWORDS = [
-  { t: 'VERDADE',   x: 12, y: 26, delay: 0.0, size: 22 },
-  { t: 'FAKE NEWS', x: 74, y: 20, delay: 1.1, size: 26 },
-  { t: 'IA',        x: 30, y: 66, delay: 0.5, size: 30 },
-  { t: 'FONTE?',    x: 82, y: 60, delay: 1.8, size: 20 },
-  { t: 'VERIFICAR', x: 58, y: 80, delay: 0.8, size: 22 },
-  { t: 'PENSE',     x: 8,  y: 54, delay: 2.2, size: 24 },
-  { t: 'DESCONFIE', x: 66, y: 40, delay: 1.5, size: 18 },
+  { t: 'VERDADE',   x: 12, y: 26, size: 22 },
+  { t: 'FAKE NEWS', x: 74, y: 20, size: 26 },
+  { t: 'IA',        x: 30, y: 66, size: 30 },
+  { t: 'FONTE?',    x: 82, y: 60, size: 20 },
+  { t: 'VERIFICAR', x: 58, y: 80, size: 22 },
+  { t: 'PENSE',     x: 8,  y: 54, size: 24 },
+  { t: 'DESCONFIE', x: 66, y: 40, size: 18 },
 ];
 
-// Constelação de dados (coords em 0..100, viewBox esticado)
+// Constelação de dados estática (coords em 0..100)
 const NODES = [
   { x: 15, y: 20 }, { x: 35, y: 12 }, { x: 55, y: 25 }, { x: 78, y: 15 },
   { x: 88, y: 35 }, { x: 70, y: 48 }, { x: 50, y: 62 }, { x: 28, y: 52 },
@@ -44,51 +40,15 @@ const LINKS: [number, number][] = [
   [7, 8], [8, 9], [9, 10], [10, 11], [11, 5], [6, 10], [2, 5], [1, 7],
 ];
 
-export default function ScreenSaver({
-  open,
-  onDismiss,
-  onPresenceDetected,
-  isGreeting,
-  amplitude,
-}: Props) {
+export default function ScreenSaver({ open, onDismiss }: Props) {
   const { resetJourney } = useGame();
   const [taglineIdx, setTaglineIdx] = useState(0);
-  const [presenceMode, setPresenceMode] = useState<PresenceEventType | null>(null);
-  const [reactionKey, setReactionKey] = useState(0);
-  const [cameraRetry, setCameraRetry] = useState(0);
-  const visualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handlePresence = useCallback((event: PresenceEvent) => {
-    setPresenceMode(event.type);
-    setReactionKey((key) => key + 1);
-    onPresenceDetected(event);
-    if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
-    visualTimerRef.current = setTimeout(
-      () => setPresenceMode(null),
-      event.type === 'engaged' ? 10_000 : 5_500
-    );
-  }, [onPresenceDetected]);
-
-  const { status: cameraStatus, message: cameraMessage, activity: cameraActivity } = usePresenceDetection({
-    enabled: open,
-    onPresence: handlePresence,
-    retryKey: cameraRetry,
-    suppressEvents: isGreeting,
-  });
 
   useEffect(() => {
-    if (!open) {
-      setPresenceMode(null);
-      if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
-      return;
-    }
+    if (!open) return;
     const t = setInterval(() => setTaglineIdx((i) => (i + 1) % TAGLINES.length), 3800);
     return () => clearInterval(t);
   }, [open]);
-
-  useEffect(() => () => {
-    if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
-  }, []);
 
   const dismiss = () => {
     resetJourney(); // novo visitante começa do zero
@@ -103,33 +63,11 @@ export default function ScreenSaver({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.5 }}
           style={{ background: 'var(--bg-primary)' }}
           onPointerDown={(e) => { e.stopPropagation(); dismiss(); }}
         >
-          {/* Identificação evidente do novo fluxo de recepção */}
-          <motion.div
-            className="absolute top-7 z-20 flex items-center gap-3 px-5 py-2.5 rounded-full pointer-events-none"
-            style={{
-              background: 'rgba(0,20,40,0.86)',
-              border: '1px solid rgba(0,255,157,0.55)',
-              boxShadow: '0 0 28px rgba(0,255,157,0.18)',
-            }}
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <motion.span
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ background: '#00ff9d' }}
-              animate={{ opacity: [0.35, 1, 0.35], scale: [0.85, 1.25, 0.85] }}
-              transition={{ duration: 1.4, repeat: Infinity }}
-            />
-            <span className="text-xs font-black tracking-[0.24em]" style={{ color: '#dffff4' }}>
-              RECEPÇÃO LOCAL · SEM TOKENS
-            </span>
-          </motion.div>
-
-          {/* Grade de fundo */}
+          {/* Grade de fundo (estática) */}
           <div
             className="absolute inset-0 opacity-[0.06] pointer-events-none"
             style={{
@@ -138,84 +76,45 @@ export default function ScreenSaver({
               backgroundSize: '70px 70px',
             }}
           />
-          {/* Brilho radial */}
+          {/* Brilho radial (estático) */}
           <div
             className="absolute inset-0 pointer-events-none"
             style={{ background: 'radial-gradient(ellipse at 50% 45%, rgba(0,102,255,0.12) 0%, transparent 65%)' }}
           />
 
-          {/* Varredura de radar */}
-          <motion.div
-            className="absolute pointer-events-none"
-            style={{
-              width: '200vmax', height: '200vmax', borderRadius: '50%',
-              background: 'conic-gradient(from 0deg, transparent 0deg, rgba(0,212,255,0.10) 25deg, transparent 55deg)',
-            }}
-            animate={{ rotate: 360 }}
-            transition={{ duration: 9, repeat: Infinity, ease: 'linear' }}
-          />
-
-          {/* Constelação de dados */}
-          <motion.svg
+          {/* Constelação de dados (estática) */}
+          <svg
             className="absolute inset-0 w-full h-full pointer-events-none"
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
-            style={{ opacity: 0.55 }}
-            animate={{ rotate: [0, 2.5, 0], scale: [1, 1.04, 1] }}
-            transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ opacity: 0.4 }}
           >
             {LINKS.map(([a, b], i) => (
-              <motion.line
+              <line
                 key={i}
                 x1={NODES[a].x} y1={NODES[a].y} x2={NODES[b].x} y2={NODES[b].y}
-                stroke="rgba(0,180,255,0.25)" strokeWidth="0.15"
-                animate={{ opacity: [0.12, 0.4, 0.12] }}
-                transition={{ duration: 4 + (i % 4), repeat: Infinity, ease: 'easeInOut' }}
+                stroke="rgba(0,180,255,0.22)" strokeWidth="0.15"
               />
             ))}
             {NODES.map((n, i) => (
-              <motion.circle
-                key={i}
-                cx={n.x} cy={n.y} r="0.6" fill="#00d4ff"
-                animate={{ opacity: [0.3, 1, 0.3], r: [0.5, 0.85, 0.5] }}
-                transition={{ duration: 2.4 + i * 0.18, repeat: Infinity, ease: 'easeInOut' }}
-              />
+              <circle key={i} cx={n.x} cy={n.y} r="0.6" fill="#00d4ff" opacity="0.6" />
             ))}
-          </motion.svg>
+          </svg>
 
-          {/* Palavras temáticas flutuantes */}
+          {/* Palavras temáticas (estáticas) */}
           {KEYWORDS.map((k) => (
-            <motion.span
+            <span
               key={k.t}
               className="absolute font-bold tracking-widest pointer-events-none"
               style={{
                 left: `${k.x}%`, top: `${k.y}%`, fontSize: k.size,
                 color: 'rgba(0,212,255,0.12)',
-                textShadow: '0 0 18px rgba(0,212,255,0.15)',
+                textShadow: '0 0 18px rgba(0,212,255,0.12)',
               }}
-              animate={{ y: [0, -22, 0], opacity: [0.1, 0.28, 0.1] }}
-              transition={{ duration: 7 + k.delay, repeat: Infinity, delay: k.delay, ease: 'easeInOut' }}
             >
               {k.t}
-            </motion.span>
+            </span>
           ))}
-
-          <AnimatePresence>
-            {presenceMode && (
-              <motion.div
-                className="absolute inset-0 pointer-events-none"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: [0, 0.75, 0.28] }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1.2 }}
-                style={{
-                  background: presenceMode === 'engaged'
-                    ? 'radial-gradient(circle at 50% 48%, rgba(0,255,157,0.25), rgba(0,212,255,0.08) 42%, transparent 72%)'
-                    : 'radial-gradient(circle at 50% 48%, rgba(255,77,126,0.24), rgba(0,212,255,0.08) 42%, transparent 72%)',
-                }}
-              />
-            )}
-          </AnimatePresence>
 
           {/* Núcleo central do Detetive */}
           <div className="relative z-10 flex flex-col items-center gap-5">
@@ -235,38 +134,7 @@ export default function ScreenSaver({
               />
             </motion.div>
 
-            <div className="relative">
-              <Avatar
-                status={isGreeting ? 'responding' : 'idle'}
-                isSpeaking={isGreeting}
-                amplitude={amplitude}
-                reaction={presenceMode === 'passing' ? 'heart' : presenceMode === 'engaged' ? 'like' : null}
-                reactionKey={reactionKey}
-                size={260}
-              />
-
-              <AnimatePresence>
-                {presenceMode && [0, 1, 2, 3, 4].map((heart) => (
-                  <motion.div
-                    key={`welcome-heart-${reactionKey}-${heart}`}
-                    className="absolute pointer-events-none"
-                    style={{ left: `${12 + heart * 19}%`, top: '52%' }}
-                    initial={{ opacity: 0, scale: 0.4, y: 10 }}
-                    animate={{ opacity: [0, 1, 0], scale: [0.4, 1.15, 0.85], y: -120 - heart * 12 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 2.4, delay: heart * 0.18, ease: 'easeOut' }}
-                  >
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill={presenceMode === 'engaged' ? '#00ff9d' : '#ff4d7e'}>
-                      {presenceMode === 'engaged' ? (
-                        <path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2zm7 12l.9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9L19 14z" />
-                      ) : (
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                      )}
-                    </svg>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
+            <Avatar status="idle" size={260} />
 
             <div className="text-center">
               <motion.h1
@@ -280,47 +148,17 @@ export default function ScreenSaver({
 
               <div className="h-16 mt-3 overflow-hidden flex items-center justify-center">
                 <AnimatePresence mode="wait">
-                  {presenceMode ? (
-                    <motion.div
-                      key={`presence-${presenceMode}`}
-                      initial={{ y: 18, opacity: 0, scale: 0.96 }}
-                      animate={{ y: 0, opacity: 1, scale: 1 }}
-                      exit={{ y: -18, opacity: 0 }}
-                      transition={{ duration: 0.45 }}
-                      className="text-center"
-                    >
-                      <p
-                        className="text-xl font-black"
-                        style={{
-                          color: presenceMode === 'engaged' ? '#62ffc1' : '#ff7aa2',
-                          textShadow: presenceMode === 'engaged'
-                            ? '0 0 22px rgba(0,255,157,0.55)'
-                            : '0 0 22px rgba(255,77,126,0.55)',
-                        }}
-                      >
-                        {presenceMode === 'engaged'
-                          ? 'Ei, investigador! Topa um desafio? 🔎'
-                          : 'Bem-vindo à Feira de Ciências! 👋'}
-                      </p>
-                      <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        {presenceMode === 'engaged'
-                          ? 'Descubra se você consegue identificar uma fake news. Toque para participar.'
-                          : 'Aproveite a visita e conheça os projetos da feira.'}
-                      </p>
-                    </motion.div>
-                  ) : (
-                    <motion.p
-                      key={taglineIdx}
-                      initial={{ y: 22, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: -22, opacity: 0 }}
-                      transition={{ duration: 0.5 }}
-                      className="text-base font-medium"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      {TAGLINES[taglineIdx]}
-                    </motion.p>
-                  )}
+                  <motion.p
+                    key={taglineIdx}
+                    initial={{ y: 22, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -22, opacity: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="text-base font-medium"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {TAGLINES[taglineIdx]}
+                  </motion.p>
                 </AnimatePresence>
               </div>
             </div>
@@ -332,79 +170,16 @@ export default function ScreenSaver({
               animate={{ scale: [1, 1.05, 1], boxShadow: ['0 0 0 rgba(0,212,255,0)', '0 0 28px rgba(0,212,255,0.45)', '0 0 0 rgba(0,212,255,0)'] }}
               transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <motion.svg
-                width="22" height="22" viewBox="0 0 24 24" fill="none"
-                animate={{ y: [0, -4, 0] }}
-                transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ color: '#00d4ff' }}
-              >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ color: '#00d4ff' }}>
                 <path d="M9 11.5V5.5a1.5 1.5 0 0 1 3 0V11M12 11V4.5a1.5 1.5 0 0 1 3 0V11M15 11V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-5.2-3l-1.6-2.8a1.5 1.5 0 0 1 2.4-1.8L9 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </motion.svg>
-              <span className="text-lg font-bold" style={{ color: '#fff' }}>{presenceMode === 'engaged' ? 'Aceitar o desafio' : 'Toque para começar'}</span>
+              </svg>
+              <span className="text-lg font-bold" style={{ color: '#fff' }}>Toque para começar</span>
             </motion.div>
           </div>
 
-          {/* Estado da câmera: visível para facilitar a instalação no totem */}
-          <div className="absolute bottom-5 z-20 flex flex-col items-center gap-2">
-            <div
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-bold tracking-[0.16em]"
-              style={{
-                color: cameraStatus === 'active' ? '#b9ffe4' : '#ffe0a6',
-                background: 'rgba(0,12,26,0.82)',
-                border: `1px solid ${cameraStatus === 'active' ? 'rgba(0,221,136,0.38)' : 'rgba(255,170,0,0.42)'}`,
-              }}
-            >
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{
-                  background: cameraStatus === 'active' ? '#00dd88' : cameraStatus === 'loading' ? '#00d4ff' : '#ffaa00',
-                }}
-              />
-              {cameraStatus === 'active'
-                ? cameraActivity === 'nearby'
-                  ? 'PESSOA PRÓXIMA · MEDINDO PERMANÊNCIA'
-                  : cameraActivity === 'observing'
-                  ? 'MOVIMENTO DETECTADO · ANALISANDO'
-                  : 'CÂMERA ATIVA · RECEPÇÃO LOCAL'
-                : cameraStatus === 'loading'
-                ? 'PREPARANDO CÂMERA'
-                : 'CÂMERA PRECISA DE ATENÇÃO'}
-            </div>
-
-            {cameraStatus === 'active' && (
-              <p className="max-w-xl text-center text-[11px]" style={{ color: 'rgba(190,225,242,0.72)' }}>
-                {cameraMessage}
-              </p>
-            )}
-
-            {cameraStatus !== 'active' && cameraStatus !== 'loading' && (
-              <div className="flex flex-col items-center gap-2">
-                <p className="max-w-lg text-center text-xs" style={{ color: 'rgba(255,225,175,0.88)' }}>
-                  {cameraMessage}
-                </p>
-                {(cameraStatus === 'blocked' || cameraStatus === 'error') && (
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-full text-xs font-bold"
-                    style={{
-                      color: '#07131f',
-                      background: '#ffaa00',
-                      boxShadow: '0 0 20px rgba(255,170,0,0.25)',
-                    }}
-                    onPointerDown={(event) => {
-                      event.stopPropagation();
-                      setCameraRetry((value) => value + 1);
-                    }}
-                  >
-                    Autorizar câmera novamente
-                  </button>
-                )}
-              </div>
-            )}
-
-            <div className="text-xs tracking-[0.3em] pointer-events-none" style={{ color: 'rgba(0,212,255,0.32)' }}>
-              FEIRA DE CIÊNCIAS · VISÃO E VOZ PROCESSADAS LOCALMENTE
-            </div>
+          {/* Rodapé */}
+          <div className="absolute bottom-6 z-20 text-xs tracking-[0.3em] pointer-events-none" style={{ color: 'rgba(0,212,255,0.32)' }}>
+            FEIRA DE CIÊNCIAS · COLÉGIO MONSENHOR RAEDER
           </div>
         </motion.div>
       )}

@@ -39,7 +39,7 @@ function Toggle({ label, hint, value, onChange }: { label: string; hint: string;
 }
 
 export default function SettingsMenu({ open, onClose, onNavigate }: Props) {
-  const { gestures, libras, voice, sound, idleSeconds, set } = useSettings();
+  const { voice, sound, idleSeconds, set } = useSettings();
   const { resetJourney } = useGame();
 
   const IDLE_OPTIONS = [
@@ -58,7 +58,7 @@ export default function SettingsMenu({ open, onClose, onNavigate }: Props) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          style={{ background: 'rgba(0,4,14,0.8)', backdropFilter: 'blur(8px)' }}
+          style={{ background: 'rgba(0,4,14,0.92)' }}
           onClick={onClose}
         >
           <motion.div
@@ -96,8 +96,6 @@ export default function SettingsMenu({ open, onClose, onNavigate }: Props) {
               {/* Recursos */}
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Recursos</p>
-                <Toggle label="Câmera e gestos" hint="Reconhecimento de mãos no assistente" value={gestures} onChange={(v) => set('gestures', v)} />
-                <Toggle label="Modo LIBRAS" hint="Reconhecer o alfabeto em LIBRAS" value={libras} onChange={(v) => set('libras', v)} />
                 <Toggle label="Microfone / voz" hint="Escutar perguntas por voz" value={voice} onChange={(v) => set('voice', v)} />
                 <Toggle label="Voz do Detetive" hint="Narração e respostas faladas" value={sound} onChange={(v) => set('sound', v)} />
               </div>

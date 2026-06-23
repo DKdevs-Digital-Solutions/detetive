@@ -1,0 +1,19 @@
+# dependências / build
+node_modules/
+.next/
+dist/
+# o container gera o próprio lockfile no boot — não versionar
+package-lock.json
+
+# segredos — NUNCA commitar
+.env
+.env.local
+.env*.local
+
+# sessão do WhatsApp (Baileys)
+.baileys_auth/
+
+# artefatos / testes
+public/certificado-teste-*.pdf
+*.log
+.DS_Store

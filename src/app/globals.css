@@ -63,11 +63,11 @@ body {
   box-shadow: 0 0 20px rgba(255, 51, 68, 0.4), 0 0 60px rgba(255, 51, 68, 0.15);
 }
 
-/* Glass card */
+/* Glass card — sem backdrop-filter (blur trava GPUs integradas antigas).
+   Fundo translúcido mais opaco mantém a aparência de cartão de vidro. */
 .glass-card {
-  background: var(--bg-card);
+  background: rgba(6, 28, 54, 0.78);
   border: 1px solid var(--border-glow);
-  backdrop-filter: blur(12px);
   border-radius: 16px;
 }
 

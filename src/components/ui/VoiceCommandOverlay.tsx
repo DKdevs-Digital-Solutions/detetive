@@ -102,7 +102,7 @@ export default function VoiceCommandOverlay({ feedback }: Props) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          style={{ backdropFilter: 'blur(14px)', background: 'rgba(0,4,16,0.78)' }}
+          style={{ background: 'rgba(0,4,16,0.92)' }}
         >
           {/* Brilho de fundo */}
           <motion.div

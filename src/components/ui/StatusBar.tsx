@@ -55,9 +55,8 @@ export default function StatusBar({ isOnline, currentScreen, onOpenSettings }: S
     <div
       className="absolute top-0 left-0 right-0 h-12 flex items-center justify-between px-4 z-50"
       style={{
-        background: 'rgba(3, 7, 18, 0.92)',
+        background: 'rgba(3, 7, 18, 0.96)',
         borderBottom: '1px solid rgba(255, 255, 255, 0.10)',
-        backdropFilter: 'blur(8px)',
       }}
     >
       {/* A logo também mantém o acesso oculto ao menu: segure por 3 segundos. */}

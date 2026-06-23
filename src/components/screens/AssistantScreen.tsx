@@ -2,13 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Screen, Message, VoiceStatus, GestureType } from '@/types';
+import { Screen, Message, VoiceStatus } from '@/types';
 import Avatar from '@/components/ui/Avatar';
 import VoiceWave from '@/components/ui/VoiceWave';
-import GestureOverlay from '@/components/ui/GestureOverlay';
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
-import { useGestureRecognition } from '@/hooks/useGestureRecognition';
 import { useGame } from '@/context/GameProvider';
 import { useSettings } from '@/context/SettingsProvider';
 
@@ -47,7 +45,6 @@ export default function AssistantScreen({ onNavigate, onVoiceCommand, isOnline }
   ]);
   const [input,         setInput]         = useState('');
   const [voiceStatus,   setVoiceStatus]   = useState<VoiceStatus>('idle');
-  const [detectedGesture, setDetectedGesture] = useState<GestureType>(null);
   const [isLoading,     setIsLoading]     = useState(false);
   const [avatarReaction, setAvatarReaction] = useState<'heart' | 'like' | null>(null);
   const [reactionKey,   setReactionKey]   = useState(0);
@@ -58,9 +55,9 @@ export default function AssistantScreen({ onNavigate, onVoiceCommand, isOnline }
   const reactionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const greetedRef      = useRef(false);
 
-  const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
+  const { speak, isSpeaking, amplitude } = useElevenLabsSpeech();
   const { grantBadge } = useGame();
-  const { gestures: gestureEnabled, libras: librasMode, voice: voiceEnabled, sound: soundEnabled } = useSettings();
+  const { voice: voiceEnabled, sound: soundEnabled } = useSettings();
 
   // Fala apenas se a voz do Detetive estiver ativada nas configurações
   const speakIfEnabled = useCallback(
@@ -105,34 +102,6 @@ export default function AssistantScreen({ onNavigate, onVoiceCommand, isOnline }
       },
       onInterimResult: () => setVoiceStatus('listening'),
     });
-
-  // ─── Gestos ────────────────────────────────────────────────────────────────
-  const handleGesture = useCallback(
-    (gesture: GestureType) => {
-      // Gestos também não interrompem uma resposta ou leitura em andamento.
-      if (isSpeaking || isLoading || voiceStatus === 'responding' || voiceStatus === 'analyzing') return;
-
-      setDetectedGesture(gesture);
-      setTimeout(() => setDetectedGesture(null), 1500);
-
-      if (gesture === 'open_hand') {
-        stopSpeaking();
-        setVoiceStatus('idle');
-      } else if (gesture === 'circular') {
-        const last = [...messages].reverse().find((m) => m.role === 'assistant');
-        if (last) speakIfEnabled(last.content);
-      } else if (gesture === 'thumbs_up') {
-        triggerReaction('like');
-      }
-    },
-    [messages, speakIfEnabled, stopSpeaking, triggerReaction, isSpeaking, isLoading, voiceStatus]
-  );
-
-  const { videoRef, canvasRef, status: gestureStatus, librasSign } = useGestureRecognition({
-    onGesture: handleGesture,
-    enabled: gestureEnabled,
-    librasMode,
-  });
 
   // ─── Enviar mensagem ────────────────────────────────────────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -372,17 +341,6 @@ export default function AssistantScreen({ onNavigate, onVoiceCommand, isOnline }
           </motion.button>
         )}
 
-
-        {gestureEnabled && (
-          <GestureOverlay
-            gesture={detectedGesture}
-            videoRef={videoRef}
-            canvasRef={canvasRef}
-            status={gestureStatus}
-            librasMode={librasMode}
-            librasSign={librasSign}
-          />
-        )}
 
         <button
           onClick={() => onNavigate('home')}

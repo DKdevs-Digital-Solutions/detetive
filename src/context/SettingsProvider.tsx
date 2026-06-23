@@ -3,8 +3,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 
 interface Settings {
-  gestures: boolean;   // câmera + reconhecimento de gestos
-  libras: boolean;     // modo LIBRAS
   voice: boolean;      // microfone / escuta por voz
   sound: boolean;      // narração / voz do Detetive (TTS)
   idleSeconds: number; // tempo de inatividade até o descanso de tela (0 = desligado)
@@ -14,7 +12,7 @@ interface SettingsCtx extends Settings {
   set: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
 }
 
-const DEFAULTS: Settings = { gestures: true, libras: false, voice: true, sound: true, idleSeconds: 70 };
+const DEFAULTS: Settings = { voice: true, sound: true, idleSeconds: 70 };
 const STORAGE_KEY = 'detetive_settings_v1';
 
 const Ctx = createContext<SettingsCtx | null>(null);

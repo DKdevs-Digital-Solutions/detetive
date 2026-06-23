@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.baileys_auth
+npm-debug.log*
+.env*.local
+public/certificado-teste-*.pdf
+*.md
+.vscode
+.claude
