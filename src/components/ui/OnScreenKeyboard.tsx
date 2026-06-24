@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 
 interface Props {
-  mode: 'text' | 'numeric';
+  mode: 'text' | 'numeric' | 'email';
   onKey: (char: string) => void;
   onBackspace: () => void;
   onEnter?: () => void;
@@ -15,6 +15,12 @@ const TEXT_ROWS = [
   ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
   ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Ç'],
   ['Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Á', 'É', 'Ã'],
+];
+const EMAIL_ROWS = [
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+  ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+  ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+  ['z', 'x', 'c', 'v', 'b', 'n', 'm', '_', '-'],
 ];
 const NUM_ROWS = [
   ['1', '2', '3'],
@@ -45,10 +51,10 @@ function Key({ label, onClick, flex = 1, accent = false }: { label: string; onCl
 }
 
 export default function OnScreenKeyboard({ mode, onKey, onBackspace, onEnter, enterLabel = 'Confirmar', enterDisabled }: Props) {
-  const rows = mode === 'text' ? TEXT_ROWS : NUM_ROWS;
+  const rows = mode === 'text' ? TEXT_ROWS : mode === 'email' ? EMAIL_ROWS : NUM_ROWS;
 
   return (
-    <div className="w-full flex flex-col gap-2" style={{ maxWidth: mode === 'text' ? 620 : 280 }}>
+    <div className="w-full flex flex-col gap-2" style={{ maxWidth: mode === 'numeric' ? 280 : 620 }}>
       {rows.map((row, i) => (
         <div key={i} className="flex gap-2 justify-center">
           {row.map((k) => (
@@ -59,6 +65,9 @@ export default function OnScreenKeyboard({ mode, onKey, onBackspace, onEnter, en
 
       <div className="flex gap-2 justify-center mt-1">
         {mode === 'text' && <Key label="Espaço" onClick={() => onKey(' ')} flex={3} />}
+        {mode === 'email' && <Key label="@" onClick={() => onKey('@')} />}
+        {mode === 'email' && <Key label="." onClick={() => onKey('.')} />}
+        {mode === 'email' && <Key label=".com" onClick={() => onKey('.com')} flex={2} />}
         <Key label="⌫ Apagar" onClick={onBackspace} flex={2} />
         {onEnter && (
           <motion.button

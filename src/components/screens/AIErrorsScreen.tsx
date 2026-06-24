@@ -30,7 +30,7 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
   const { grantBadge } = useGame();
   const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
-  const [selected, setSelected] = useState<number | null>(null);
+  const [opened, setOpened] = useState<Set<number>>(new Set());
   const [playing, setPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [done, setDone] = useState(false);
@@ -56,7 +56,7 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
     playingRef.current = true;
     setPlaying(true);
     setDone(false);
-    setSelected(null);
+    setOpened(new Set());
     setCurrentIndex(-1);
     stopSpeaking();
     grantBadge('ai-errors'); // selo da jornada (o Detetive está conduzindo)
@@ -68,11 +68,17 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
       if (!playingRef.current || runId !== runIdRef.current) return;
       const ex = AI_ERROR_EXAMPLES[i];
       setCurrentIndex(i);
-      setSelected(ex.id);
+      // Mantém os cartões já abertos abertos (a tela é grande e ajuda a ler).
+      setOpened((prev) => { const next = new Set(prev); next.add(ex.id); return next; });
       cardRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await speakAndWait(`${ex.category}. ${ex.question} ${ex.explanation}`, runId);
+      await speakAndWait(
+        `${ex.category}. Imagine perguntar à inteligência artificial: ${ex.question} Ela pode responder com muita confiança, mas errado, como você vê aí na tela. O certo é: ${ex.correctAnswer} Isso acontece porque ${ex.explanation}`,
+        runId,
+      );
       if (!playingRef.current || runId !== runIdRef.current) return;
-      await new Promise<void>((r) => setTimeout(r, 200));
+      // Pausa generosa para dar tempo de LER o exemplo na tela antes de trocar de cartão.
+      const readMs = Math.min(7000, Math.max(4000, ex.wrongAnswer.length * 50));
+      await new Promise<void>((r) => setTimeout(r, readMs));
     }
 
     if (!playingRef.current || runId !== runIdRef.current) return;
@@ -132,7 +138,7 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
         {/* Error cards */}
         <div className="space-y-3">
           {AI_ERROR_EXAMPLES.map((ex, i) => {
-            const isOpen = selected === ex.id;
+            const isOpen = opened.has(ex.id);
             const isCurrent = currentIndex === i;
             return (
               <motion.div
@@ -149,7 +155,14 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
               >
                 <button
                   className="w-full p-4 flex items-center gap-3 text-left"
-                  onClick={() => { setSelected(isOpen ? null : ex.id); grantBadge('ai-errors'); }}
+                  onClick={() => {
+                    setOpened((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(ex.id)) next.delete(ex.id); else next.add(ex.id);
+                      return next;
+                    });
+                    grantBadge('ai-errors');
+                  }}
                 >
                   <span className="text-2xl">{CATEGORY_ICONS[ex.category] || '⚡'}</span>
                   <div className="flex-1">

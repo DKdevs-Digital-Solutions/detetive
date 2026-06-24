@@ -15,7 +15,6 @@ import StatusBar from '@/components/ui/StatusBar';
 import JourneyProgress from '@/components/ui/JourneyProgress';
 import SealCelebration from '@/components/ui/SealCelebration';
 import SettingsMenu from '@/components/ui/SettingsMenu';
-import ScreenSaver from '@/components/ui/ScreenSaver';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import { GameProvider, useGame } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
@@ -26,9 +25,6 @@ const PRAISE = [
   'Boa! Mais um selo na sua jornada de detetive. Seguindo!',
   'Mandou bem! Selo conquistado. Vamos continuar a investigação.',
 ];
-
-const WELCOME =
-  'Olá! Eu sou o Detetive. Vamos investigar juntos a inteligência artificial e as fake news. É uma jornada com cinco fases — toque em começar e siga comigo até o final para ganhar seu certificado.';
 
 export default function App() {
   return (
@@ -42,13 +38,12 @@ export default function App() {
 
 function AppShell() {
   const { idleSeconds, sound } = useSettings();
-  const { grantBadge } = useGame();
+  const { grantBadge, resetJourney } = useGame();
   const { speak, stop: stopSpeak } = useElevenLabsSpeech();
 
   const [screen, setScreen] = useState<Screen>('home');
   const [isOnline, setIsOnline] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [saverOpen, setSaverOpen] = useState(true);
   const [speechBusy, setSpeechBusy] = useState(false);
   const [celebration, setCelebration] = useState<BadgeId | null>(null);
 
@@ -101,34 +96,27 @@ function AppShell() {
     }, 3000);
   }, [grantBadge, sound, speak, stopSpeak]);
 
-  // ─── Descanso de tela ────────────────────────────────────────────────────────
-  const showScreenSaver = useCallback(() => {
+  // ─── Inatividade → reinicia a sessão ─────────────────────────────────────────
+  // Substitui o antigo descanso de tela: ao ficar ocioso, limpa o progresso do
+  // visitante e volta para a tela inicial (sessão zerada para o próximo).
+  const restartSession = useCallback(() => {
     stopSpeak();
     setCelebration(null);
+    resetJourney();
     setScreen('home');
-    setSaverOpen(true);
-  }, [stopSpeak]);
-
-  const dismissScreenSaver = useCallback(() => {
-    stopSpeak();
-    setSaverOpen(false);
-    setScreen('home');
-    // Saudação falada automaticamente, uma vez por sessão. O toque que dispensou
-    // o descanso de tela libera o áudio do navegador, então o autoplay funciona.
-    if (sound) window.setTimeout(() => speak(WELCOME), 300);
-  }, [sound, speak, stopSpeak]);
+  }, [resetJourney, stopSpeak]);
 
   // Timer de inatividade (configurável; 0 = desligado)
   useEffect(() => {
-    if (!idleSeconds || idleSeconds <= 0 || saverOpen || speechBusy) return;
+    if (!idleSeconds || idleSeconds <= 0 || speechBusy) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const reset = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => showScreenSaver(), idleSeconds * 1000);
+      timer = setTimeout(() => restartSession(), idleSeconds * 1000);
     };
     const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart', 'mousemove'];
     events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
-    // Mantém acordado durante atividades autônomas (ex.: o Detetive lendo o checklist)
+    // Mantém acordado durante atividades autônomas (ex.: o Detetive narrando)
     window.addEventListener('detetive:keepalive', reset);
     reset();
     return () => {
@@ -136,16 +124,16 @@ function AppShell() {
       events.forEach((e) => window.removeEventListener(e, reset));
       window.removeEventListener('detetive:keepalive', reset);
     };
-  }, [idleSeconds, showScreenSaver, saverOpen, speechBusy]);
+  }, [idleSeconds, restartSession, speechBusy]);
 
   // Esc volta ao início (navegação)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !speechBusy && !saverOpen) setScreen('home');
+      if (e.key === 'Escape' && !speechBusy) setScreen('home');
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [speechBusy, saverOpen]);
+  }, [speechBusy]);
 
   // Online/offline
   useEffect(() => {
@@ -183,7 +171,7 @@ function AppShell() {
       case 'ai-errors':
         return <AIErrorsScreen onNavigate={navigate} onAdvance={() => advanceFrom('ai-errors')} />;
       case 'certificate':
-        return <CertificateScreen onNavigate={navigate} onComplete={showScreenSaver} />;
+        return <CertificateScreen onNavigate={navigate} onComplete={restartSession} />;
       case 'admin':
         return <AdminScreen onNavigate={navigate} />;
       default:
@@ -234,9 +222,6 @@ function AppShell() {
 
       {/* Menu de configuração (pressionar o logo por 3 segundos) */}
       <SettingsMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={navigate} />
-
-      {/* Descanso de tela (inatividade) */}
-      <ScreenSaver open={saverOpen} onDismiss={dismissScreenSaver} />
     </main>
   );
 }

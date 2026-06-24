@@ -213,6 +213,17 @@ export default function AdminScreen({ onNavigate }: AdminScreenProps) {
                 </button>
 
                 <button
+                  onClick={() => window.open(`/api/certificate?export=csv&key=${encodeURIComponent(password)}`, '_blank')}
+                  className="btn btn-ghost text-sm"
+                  style={{ borderColor: 'rgba(0,221,102,0.4)', color: '#00dd66' }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Exportar certificados (CSV)
+                </button>
+
+                <button
                   onClick={resetStats}
                   disabled={isResetting}
                   className="btn text-sm"
@@ -245,8 +256,7 @@ export default function AdminScreen({ onNavigate }: AdminScreenProps) {
                   ['Modelo de IA', 'Claude Haiku (Anthropic)'],
                   ['Voz (TTS)', 'ElevenLabs (neural)'],
                   ['Reconhecimento de voz', 'Web Speech API'],
-                  ['Reconhecimento de gestos', 'MediaPipe Hands (CDN)'],
-                  ['Certificado', 'PDF via WhatsApp (Baileys)'],
+                  ['Certificado', 'WhatsApp (PDF) ou email (histórico)'],
                   ['Framework', 'Next.js 14 + React 18'],
                 ].map(([key, val]) => (
                   <div key={key} className="flex flex-col p-2 rounded-lg" style={{ background: 'rgba(0,20,40,0.4)' }}>
