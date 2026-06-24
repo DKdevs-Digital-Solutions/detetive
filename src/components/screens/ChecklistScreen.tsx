@@ -9,6 +9,7 @@ import Avatar from '@/components/ui/Avatar';
 
 interface ChecklistScreenProps {
   onNavigate: (screen: Screen) => void;
+  onAdvance: () => void;
 }
 
 const CHECKLIST_ITEMS = [
@@ -27,7 +28,7 @@ const CHECKLIST_ITEMS = [
 const INTRO = 'Vou te ensinar a desconfiar de notícias falsas. Preste atenção em cada ponto que eu vou marcar.';
 const CLOSING = 'Pronto! Quanto mais respostas sim, mais confiável é a notícia. Na dúvida, não compartilhe.';
 
-export default function ChecklistScreen({ onNavigate }: ChecklistScreenProps) {
+export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScreenProps) {
   const { grantBadge } = useGame();
   const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
@@ -274,9 +275,17 @@ export default function ChecklistScreen({ onNavigate }: ChecklistScreenProps) {
             {verdict.text}
           </motion.p>
         </div>
-        <button onClick={reset} className="btn btn-ghost text-xs py-2 px-4">
-          Reiniciar
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={reset} className="btn btn-ghost text-xs py-2 px-4">
+            Reiniciar
+          </button>
+          <button onClick={onAdvance} className="btn btn-primary text-sm py-2 px-5">
+            Continuar
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

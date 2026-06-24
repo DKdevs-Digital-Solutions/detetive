@@ -22,3 +22,20 @@ export const BADGE_IDS: BadgeId[] = BADGES.map((b) => b.id);
 export function emptyBadges(): Record<BadgeId, boolean> {
   return BADGE_IDS.reduce((acc, id) => ({ ...acc, [id]: false }), {} as Record<BadgeId, boolean>);
 }
+
+// ─── Jornada linear (fase → fase → certificado) ────────────────────────────────
+// Ordem pedagógica: entender que a IA falha → aplicar → reforçar → testar →
+// conversar. A última fase é a conversa por voz; ao concluí-la, vai ao certificado.
+export const JOURNEY: Screen[] = ['ai-errors', 'news', 'checklist', 'quiz', 'assistant'];
+
+export const PHASE_LABELS: Record<string, string> = {
+  'ai-errors': 'A IA pode errar?',
+  news: 'Analisar uma notícia',
+  checklist: 'Checklist anti-fake news',
+  quiz: 'Quiz',
+  assistant: 'Converse com o Detetive',
+};
+
+export function journeyIndex(screen: Screen): number {
+  return JOURNEY.indexOf(screen);
+}

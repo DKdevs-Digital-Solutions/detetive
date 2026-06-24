@@ -8,6 +8,7 @@ import { useGame } from '@/context/GameProvider';
 
 interface AIErrorsScreenProps {
   onNavigate: (screen: Screen) => void;
+  onAdvance: () => void;
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -18,7 +19,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Fonte inexistente': '📭',
 };
 
-export default function AIErrorsScreen({ onNavigate }: AIErrorsScreenProps) {
+export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreenProps) {
   const { grantBadge } = useGame();
   const [selected, setSelected] = useState<number | null>(null);
 
@@ -157,6 +158,19 @@ export default function AIErrorsScreen({ onNavigate }: AIErrorsScreenProps) {
             &quot;A inteligência artificial pode ajudar muito, mas não substitui o pensamento humano. Sempre verifique, compare e reflita.&quot;
           </p>
         </motion.div>
+      </div>
+
+      {/* Avançar na jornada */}
+      <div
+        className="px-6 py-3 flex justify-end shrink-0"
+        style={{ borderTop: '1px solid rgba(0,212,255,0.1)', background: 'rgba(3,7,18,0.6)' }}
+      >
+        <button onClick={onAdvance} className="btn btn-primary text-sm" style={{ padding: '12px 26px' }}>
+          Continuar
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       </div>
     </div>
   );

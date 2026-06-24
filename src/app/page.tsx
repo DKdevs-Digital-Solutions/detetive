@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Screen } from '@/types';
 import HomeScreen from '@/components/screens/HomeScreen';
-import AssistantScreen from '@/components/screens/AssistantScreen';
+import ConversationScreen from '@/components/screens/ConversationScreen';
 import NewsAnalyzerScreen from '@/components/screens/NewsAnalyzerScreen';
 import QuizScreen from '@/components/screens/QuizScreen';
 import ChecklistScreen from '@/components/screens/ChecklistScreen';
@@ -11,22 +11,16 @@ import AIErrorsScreen from '@/components/screens/AIErrorsScreen';
 import AdminScreen from '@/components/screens/AdminScreen';
 import CertificateScreen from '@/components/screens/CertificateScreen';
 import StatusBar from '@/components/ui/StatusBar';
-import VoiceCommandOverlay from '@/components/ui/VoiceCommandOverlay';
+import JourneyProgress from '@/components/ui/JourneyProgress';
 import SettingsMenu from '@/components/ui/SettingsMenu';
 import ScreenSaver from '@/components/ui/ScreenSaver';
-import { useVoiceCommands } from '@/hooks/useVoiceCommands';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import { GameProvider } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
-
-interface CommandFeedback {
-  screen: Screen;
-  text: string;
-}
+import { JOURNEY } from '@/lib/game';
 
 const WELCOME =
-  'Olá! Eu sou o Detetive. Bem-vindo à nossa investigação sobre inteligência artificial e fake news. Toque numa opção para começar, ou fale comigo.';
-
+  'Olá! Eu sou o Detetive. Vamos investigar juntos a inteligência artificial e as fake news. É uma jornada com cinco fases — toque em começar e siga comigo até o final para ganhar seu certificado.';
 
 export default function App() {
   return (
@@ -40,19 +34,15 @@ export default function App() {
 
 function AppShell() {
   const { idleSeconds, sound } = useSettings();
-  const {
-    speak: speakWelcome,
-    stop: stopWelcome,
-  } = useElevenLabsSpeech();
+  const { speak: speakWelcome, stop: stopWelcome } = useElevenLabsSpeech();
 
   const [screen, setScreen] = useState<Screen>('home');
   const [isOnline, setIsOnline] = useState(true);
-  const [commandFeedback, setCommandFeedback] = useState<CommandFeedback | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [saverOpen, setSaverOpen] = useState(true);
   const [speechBusy, setSpeechBusy] = useState(false);
 
-  const welcomePlayedRef = useRef(false);
+  const inJourney = JOURNEY.includes(screen);
 
   // Estado global de fala: qualquer tela pode bloquear o reconhecimento de ordens
   // enquanto o Detetive estiver lendo ou respondendo.
@@ -78,18 +68,32 @@ function AppShell() {
     };
   }, []);
 
-  // ─── Boas-vindas (início de cada sessão) ─────────────────────────────────────
+  // ─── Navegação ───────────────────────────────────────────────────────────────
+  const navigate = useCallback((s: Screen) => {
+    stopWelcome();
+    setScreen(s);
+  }, [stopWelcome]);
+
+  // Boas-vindas faladas SOMENTE quando a pessoa toca no botão "ouvir".
   const playWelcome = useCallback(() => {
-    if (!sound || welcomePlayedRef.current) return;
-    welcomePlayedRef.current = true;
+    stopWelcome();
     speakWelcome(WELCOME);
-  }, [sound, speakWelcome]);
+  }, [speakWelcome, stopWelcome]);
+
+  // Começa a jornada na primeira fase.
+  const startJourney = useCallback(() => navigate(JOURNEY[0]), [navigate]);
+
+  // Avança para a próxima fase; após a última, vai para o certificado.
+  const advanceFrom = useCallback((from: Screen) => {
+    const i = JOURNEY.indexOf(from);
+    const next: Screen = i === -1 || i === JOURNEY.length - 1 ? 'certificate' : JOURNEY[i + 1];
+    navigate(next);
+  }, [navigate]);
 
   // ─── Descanso de tela ────────────────────────────────────────────────────────
   const showScreenSaver = useCallback(() => {
     stopWelcome();
-    welcomePlayedRef.current = false; // próxima sessão recebe boas-vindas
-    setScreen('home'); // desmonta a escuta de telas internas antes do modo ocioso
+    setScreen('home');
     setSaverOpen(true);
   }, [stopWelcome]);
 
@@ -97,12 +101,7 @@ function AppShell() {
     stopWelcome();
     setSaverOpen(false);
     setScreen('home');
-
-    // A pessoa tocou na tela: o Detetive se apresenta com as boas-vindas.
-    setTimeout(() => {
-      if (sound && !welcomePlayedRef.current) playWelcome();
-    }, 300);
-  }, [playWelcome, sound, stopWelcome]);
+  }, [stopWelcome]);
 
   // Timer de inatividade (configurável; 0 = desligado)
   useEffect(() => {
@@ -148,52 +147,46 @@ function AppShell() {
 
   useEffect(() => {
     fetch('/api/log', { method: 'POST', body: JSON.stringify({ type: 'visitor' }) }).catch(() => {});
-
     // Inicia o Baileys ao abrir o totem, sem depender de alguém entrar no painel admin.
     fetch('/api/whatsapp').catch(() => {});
   }, []);
 
-  // Navega e interrompe as boas-vindas (a pessoa escolheu uma atividade)
-  const navigate = useCallback((s: Screen) => {
-    stopWelcome();
-    setScreen(s);
-  }, [stopWelcome]);
-
-  const handleVoiceCommand = useCallback(
-    (dest: Screen, recognizedText: string) => {
-      if (speechBusy || saverOpen) return;
-      setCommandFeedback({ screen: dest, text: recognizedText });
-      setTimeout(() => {
-        setCommandFeedback(null);
-        stopWelcome();
-        setScreen(dest);
-      }, 1500);
-    },
-    [stopWelcome, speechBusy, saverOpen]
-  );
-
-  useVoiceCommands(handleVoiceCommand, screen !== 'assistant' && !saverOpen && !speechBusy);
-
   const renderScreen = () => {
     switch (screen) {
       case 'home':
-        return <HomeScreen onNavigate={navigate} isOnline={isOnline} />;
+        return (
+          <HomeScreen
+            onStart={startJourney}
+            onPlayWelcome={playWelcome}
+            canSpeak={sound}
+            welcomeText={WELCOME}
+            isOnline={isOnline}
+          />
+        );
       case 'assistant':
-        return <AssistantScreen onNavigate={navigate} onVoiceCommand={handleVoiceCommand} isOnline={isOnline} />;
+        return <ConversationScreen onAdvance={() => advanceFrom('assistant')} isOnline={isOnline} />;
       case 'news':
-        return <NewsAnalyzerScreen onNavigate={navigate} isOnline={isOnline} />;
+        return <NewsAnalyzerScreen onNavigate={navigate} onAdvance={() => advanceFrom('news')} isOnline={isOnline} />;
       case 'quiz':
-        return <QuizScreen onNavigate={navigate} />;
+        return <QuizScreen onNavigate={navigate} onAdvance={() => advanceFrom('quiz')} />;
       case 'checklist':
-        return <ChecklistScreen onNavigate={navigate} />;
+        return <ChecklistScreen onNavigate={navigate} onAdvance={() => advanceFrom('checklist')} />;
       case 'ai-errors':
-        return <AIErrorsScreen onNavigate={navigate} />;
+        return <AIErrorsScreen onNavigate={navigate} onAdvance={() => advanceFrom('ai-errors')} />;
       case 'certificate':
         return <CertificateScreen onNavigate={navigate} onComplete={showScreenSaver} />;
       case 'admin':
         return <AdminScreen onNavigate={navigate} />;
       default:
-        return <HomeScreen onNavigate={navigate} isOnline={isOnline} />;
+        return (
+          <HomeScreen
+            onStart={startJourney}
+            onPlayWelcome={playWelcome}
+            canSpeak={sound}
+            welcomeText={WELCOME}
+            isOnline={isOnline}
+          />
+        );
     }
   };
 
@@ -225,20 +218,17 @@ function AppShell() {
         onOpenSettings={() => setMenuOpen(true)}
       />
 
-      {/* Screen content */}
-      <div className="w-full h-full pt-12">{renderScreen()}</div>
-
-      {/* Overlay de transição ao reconhecer comando de voz */}
-      <VoiceCommandOverlay feedback={commandFeedback} />
+      {/* Screen content (com barra de progresso da jornada) */}
+      <div className="w-full h-full pt-12 flex flex-col">
+        {inJourney && <JourneyProgress current={screen} />}
+        <div className="flex-1 min-h-0">{renderScreen()}</div>
+      </div>
 
       {/* Menu de configuração (pressionar o logo por 3 segundos) */}
       <SettingsMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={navigate} />
 
       {/* Descanso de tela (inatividade) */}
-      <ScreenSaver
-        open={saverOpen}
-        onDismiss={dismissScreenSaver}
-      />
+      <ScreenSaver open={saverOpen} onDismiss={dismissScreenSaver} />
     </main>
   );
 }

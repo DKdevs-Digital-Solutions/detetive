@@ -2,26 +2,53 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Screen } from '@/types';
+import { Screen, QuizQuestion } from '@/types';
 import { QUIZ_QUESTIONS } from '@/data/quiz';
 import { useGame } from '@/context/GameProvider';
 
 interface QuizScreenProps {
   onNavigate: (screen: Screen) => void;
+  onAdvance: () => void;
 }
 
 type QuizState = 'intro' | 'question' | 'result';
 
-export default function QuizScreen({ onNavigate }: QuizScreenProps) {
+// Embaralhamento Fisher-Yates (cópia — não muta o original).
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Monta o baralho da sessão: ordem das perguntas E ordem das alternativas
+// embaralhadas, com o índice da resposta correta remapeado. Evita o vício de
+// "a resposta é quase sempre a letra B".
+function buildDeck(): QuizQuestion[] {
+  return shuffle(QUIZ_QUESTIONS).map((q) => {
+    const tagged = q.options.map((text, i) => ({ text, correct: i === q.correct }));
+    const mixed = shuffle(tagged);
+    return {
+      ...q,
+      options: mixed.map((o) => o.text),
+      correct: mixed.findIndex((o) => o.correct),
+    };
+  });
+}
+
+export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
   const { grantBadge } = useGame();
+  const [deck, setDeck] = useState<QuizQuestion[]>(() => buildDeck());
   const [state, setState] = useState<QuizState>('intro');
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
-  const [answers, setAnswers] = useState<(number | null)[]>(Array(QUIZ_QUESTIONS.length).fill(null));
+  const [answers, setAnswers] = useState<(number | null)[]>(Array(deck.length).fill(null));
 
-  const question = QUIZ_QUESTIONS[currentQ];
-  const progress = ((currentQ) / QUIZ_QUESTIONS.length) * 100;
+  const question = deck[currentQ];
+  const progress = ((currentQ) / deck.length) * 100;
 
   const handleSelect = (idx: number) => {
     if (selected !== null) return;
@@ -34,27 +61,28 @@ export default function QuizScreen({ onNavigate }: QuizScreenProps) {
 
   const handleNext = () => {
     setSelected(null);
-    if (currentQ < QUIZ_QUESTIONS.length - 1) {
+    if (currentQ < deck.length - 1) {
       setCurrentQ((q) => q + 1);
     } else {
       setState('result');
       grantBadge('quiz'); // selo da jornada
       fetch('/api/log', {
         method: 'POST',
-        body: JSON.stringify({ type: 'quiz', score: Math.round((score / QUIZ_QUESTIONS.length) * 100) }),
+        body: JSON.stringify({ type: 'quiz', score: Math.round((score / deck.length) * 100) }),
       }).catch(() => {});
     }
   };
 
   const handleRestart = () => {
+    setDeck(buildDeck()); // nova ordem de perguntas e respostas
     setState('intro');
     setCurrentQ(0);
     setSelected(null);
     setScore(0);
-    setAnswers(Array(QUIZ_QUESTIONS.length).fill(null));
+    setAnswers(Array(deck.length).fill(null));
   };
 
-  const pct = Math.round((score / QUIZ_QUESTIONS.length) * 100);
+  const pct = Math.round((score / deck.length) * 100);
   const resultMsg =
     pct >= 80
       ? 'Excelente! Você é um verdadeiro Detetive IA!'
@@ -81,7 +109,7 @@ export default function QuizScreen({ onNavigate }: QuizScreenProps) {
         {state === 'question' && (
           <div className="ml-auto flex items-center gap-3">
             <span className="text-sm font-mono" style={{ color: '#00d4ff' }}>
-              {currentQ + 1}/{QUIZ_QUESTIONS.length}
+              {currentQ + 1}/{deck.length}
             </span>
             <div className="w-32 h-2 rounded-full" style={{ background: 'rgba(0,212,255,0.15)' }}>
               <motion.div
@@ -150,7 +178,7 @@ export default function QuizScreen({ onNavigate }: QuizScreenProps) {
               {/* Question */}
               <div className="glass-card p-6">
                 <p className="text-xs font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>
-                  PERGUNTA {currentQ + 1} DE {QUIZ_QUESTIONS.length}
+                  PERGUNTA {currentQ + 1} DE {deck.length}
                 </p>
                 <h3 className="text-xl font-bold leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                   {question.question}
@@ -238,7 +266,7 @@ export default function QuizScreen({ onNavigate }: QuizScreenProps) {
                   onClick={handleNext}
                   className="w-full btn btn-primary py-3"
                 >
-                  {currentQ < QUIZ_QUESTIONS.length - 1 ? 'Próxima Pergunta' : 'Ver Resultado'}
+                  {currentQ < deck.length - 1 ? 'Próxima Pergunta' : 'Ver Resultado'}
                 </motion.button>
               )}
             </motion.div>
@@ -262,7 +290,7 @@ export default function QuizScreen({ onNavigate }: QuizScreenProps) {
 
             <div>
               <h3 className="text-3xl font-bold mb-2" style={{ color: resultColor }}>
-                {score}/{QUIZ_QUESTIONS.length}
+                {score}/{deck.length}
               </h3>
               <p className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
                 {pct}% de acertos
@@ -283,7 +311,7 @@ export default function QuizScreen({ onNavigate }: QuizScreenProps) {
 
             {/* Answer summary */}
             <div className="w-full grid grid-cols-5 gap-2">
-              {QUIZ_QUESTIONS.map((q, i) => {
+              {deck.map((q, i) => {
                 const ans = answers[i];
                 const correct = ans === q.correct;
                 return (
@@ -303,11 +331,14 @@ export default function QuizScreen({ onNavigate }: QuizScreenProps) {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={handleRestart} className="btn btn-primary">
+              <button onClick={handleRestart} className="btn btn-ghost">
                 Jogar Novamente
               </button>
-              <button onClick={() => onNavigate('home')} className="btn btn-ghost">
-                Menu Principal
+              <button onClick={onAdvance} className="btn btn-primary">
+                Continuar
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
             </div>
           </motion.div>

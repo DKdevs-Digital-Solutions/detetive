@@ -137,14 +137,12 @@ export default function ScreenSaver({ open, onDismiss }: Props) {
             <Avatar status="idle" size={260} />
 
             <div className="text-center">
-              <motion.h1
+              <h1
                 className="text-5xl font-black tracking-tight"
-                style={{ color: '#00d4ff', textShadow: '0 0 40px rgba(0,212,255,0.6)' }}
-                animate={{ textShadow: ['0 0 30px rgba(0,212,255,0.4)', '0 0 55px rgba(0,212,255,0.8)', '0 0 30px rgba(0,212,255,0.4)'] }}
-                transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ color: '#00d4ff', textShadow: '0 0 40px rgba(0,212,255,0.5)' }}
               >
                 DETETIVE <span style={{ color: '#ffffff' }}>IA</span>
-              </motion.h1>
+              </h1>
 
               <div className="h-16 mt-3 overflow-hidden flex items-center justify-center">
                 <AnimatePresence mode="wait">
@@ -166,9 +164,9 @@ export default function ScreenSaver({ open, onDismiss }: Props) {
             {/* Chamada para ação */}
             <motion.div
               className="flex items-center gap-3 px-6 py-3 rounded-full mt-2"
-              style={{ background: 'rgba(0,50,90,0.4)', border: '1px solid rgba(0,212,255,0.35)' }}
-              animate={{ scale: [1, 1.05, 1], boxShadow: ['0 0 0 rgba(0,212,255,0)', '0 0 28px rgba(0,212,255,0.45)', '0 0 0 rgba(0,212,255,0)'] }}
-              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ background: 'rgba(0,50,90,0.4)', border: '1px solid rgba(0,212,255,0.35)', boxShadow: '0 0 22px rgba(0,212,255,0.22)' }}
+              animate={{ scale: [1, 1.04, 1] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ color: '#00d4ff' }}>
                 <path d="M9 11.5V5.5a1.5 1.5 0 0 1 3 0V11M12 11V4.5a1.5 1.5 0 0 1 3 0V11M15 11V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-5.2-3l-1.6-2.8a1.5 1.5 0 0 1 2.4-1.8L9 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

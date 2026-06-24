@@ -6,20 +6,12 @@ import { VoiceStatus } from '@/types';
 interface AvatarProps {
   status: VoiceStatus;
   isSpeaking?: boolean;
-  /** Amplitude real da voz (0..1) — dirige toda a reatividade do núcleo */
+  /** Amplitude real da voz (0..1) — dirige a reatividade do núcleo */
   amplitude?: MotionValue<number>;
   reaction?: 'heart' | 'like' | null;
   reactionKey?: number;
   size?: number;
 }
-
-const BAR_COUNT = 56;
-// Pesos fixos por barra (sem Math.random no render) — dá textura ao equalizer
-const BAR_WEIGHTS = Array.from({ length: BAR_COUNT }, (_, i) => {
-  const a = Math.sin(i * 1.7) * 0.5 + 0.5;
-  const b = Math.sin(i * 0.6 + 2) * 0.5 + 0.5;
-  return 0.35 + (a * 0.6 + b * 0.4) * 0.65; // 0.35..1.0
-});
 
 function themeColor(status: VoiceStatus) {
   switch (status) {
@@ -30,27 +22,14 @@ function themeColor(status: VoiceStatus) {
   }
 }
 
-// ─── Barra reativa do equalizer radial ─────────────────────────────────────────
-function Bar({
-  angle, weight, amp, color, radius,
-}: { angle: number; weight: number; amp: MotionValue<number>; color: string; radius: number }) {
-  // altura da barra = base + amplitude * peso
-  const h = useTransform(amp, [0, 1], [4, 4 + weight * 30]);
-  const op = useTransform(amp, [0, 1], [0.35, 1]);
-  return (
-    <g transform={`rotate(${angle})`}>
-      <motion.rect
-        x={-1.4}
-        y={-radius}
-        width={2.8}
-        rx={1.4}
-        fill={color}
-        style={{ height: h, opacity: op, transformBox: 'fill-box', transformOrigin: 'top' }}
-      />
-    </g>
-  );
-}
-
+/**
+ * Avatar "arc reactor" — versão LEVE para hardware antigo (Intel HD de 2011).
+ *
+ * Mantém a aparência (núcleo brilhante + anel + HUD), mas remove o que pesava:
+ * sem equalizer de 56 barras, sem drop-shadow animado, sem 4 grupos girando.
+ * Restam: 1 anel girando (transform composited) e a reatividade do núcleo
+ * (scale/opacity), que só recalcula quando a voz toca.
+ */
 export default function Avatar({
   status,
   isSpeaking = false,
@@ -65,89 +44,70 @@ export default function Avatar({
   const { main, soft } = themeColor(status);
   const reactionColor = reaction === 'heart' ? '#ff4d7e' : '#00ff9d';
 
-  // Reatividade derivada da amplitude
-  const coreScale   = useTransform(amp, [0, 1], [1, 1.18]);
-  const coreOpacity = useTransform(amp, [0, 1], [0.55, 1]);
-  const haloScale   = useTransform(amp, [0, 1], [1, 1.35]);
-  const haloOpacity = useTransform(amp, [0, 1], [0.15, 0.5]);
-  const ringScale   = useTransform(amp, [0, 1], [1, 1.06]);
-  const glowBlur    = useTransform(amp, [0, 1], [6, 22]);
-  const coreFilter  = useTransform(glowBlur, (b) => `drop-shadow(0 0 ${b}px ${main})`);
+  // Reatividade derivada da amplitude (apenas transform/opacity — baratos)
+  const coreScale   = useTransform(amp, [0, 1], [1, 1.14]);
+  const coreOpacity = useTransform(amp, [0, 1], [0.6, 1]);
+  const glowScale   = useTransform(amp, [0, 1], [1, 1.3]);
+  const glowOpacity = useTransform(amp, [0, 1], [0.22, 0.6]);
 
   const C = 110; // centro do viewBox 220
-  const eqRadius = 70;
 
   return (
-    <motion.div
-      className="relative flex items-center justify-center"
-      style={{ width: size, height: size }}
-      animate={{ y: [0, -6, 0] }}
-      transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-    >
-      {/* Halo externo difuso — respira com a voz */}
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      {/* Glow reativo (radial-gradient em transform/opacity) */}
       <motion.div
         className="absolute rounded-full pointer-events-none"
         style={{
-          width: size * 0.95, height: size * 0.95,
-          background: `radial-gradient(circle, ${main}33 0%, transparent 65%)`,
-          scale: haloScale, opacity: haloOpacity,
+          width: size * 0.82, height: size * 0.82,
+          background: `radial-gradient(circle, ${main}55 0%, transparent 65%)`,
+          scale: glowScale, opacity: glowOpacity,
         }}
       />
 
-      {/* Pulsos concêntricos enquanto fala */}
+      {/* Pulsos concêntricos só enquanto fala (transitório) */}
       <AnimatePresence>
-        {isSpeaking && [0, 1, 2].map((i) => (
+        {isSpeaking && [0, 1].map((i) => (
           <motion.div
             key={`pulse-${i}`}
             className="absolute rounded-full pointer-events-none"
-            style={{ width: size * 0.7, height: size * 0.7, border: `1.5px solid ${main}` }}
+            style={{ width: size * 0.62, height: size * 0.62, border: `1.5px solid ${main}` }}
             initial={{ scale: 0.7, opacity: 0.5 }}
             animate={{ scale: 1.5, opacity: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 2.4, repeat: Infinity, delay: i * 0.8, ease: 'easeOut' }}
+            transition={{ duration: 2.4, repeat: Infinity, delay: i * 0.9, ease: 'easeOut' }}
           />
         ))}
       </AnimatePresence>
 
-      {/* Flash de reação */}
+      {/* Flash de reação (transitório) */}
       <AnimatePresence>
         {reaction && (
           <motion.div
             key={`react-ring-${reactionKey}`}
             className="absolute rounded-full pointer-events-none"
-            style={{
-              width: size * 1.1, height: size * 1.1,
-              border: `3px solid ${reactionColor}`,
-              boxShadow: `0 0 40px ${reactionColor}aa`,
-            }}
+            style={{ width: size * 1.05, height: size * 1.05, border: `3px solid ${reactionColor}` }}
             initial={{ scale: 0.6, opacity: 0.9 }}
-            animate={{ scale: 1.6, opacity: 0 }}
+            animate={{ scale: 1.5, opacity: 0 }}
             transition={{ duration: 0.85, ease: 'easeOut' }}
           />
         )}
       </AnimatePresence>
 
-      {/* Anel HUD externo girando */}
+      {/* Único anel girando (transform composited — leve) */}
       <motion.div
         className="absolute rounded-full pointer-events-none"
-        style={{ width: size * 0.92, height: size * 0.92, border: `1px dashed ${main}44` }}
+        style={{ width: size * 0.9, height: size * 0.9, border: `1px dashed ${main}44` }}
         animate={{ rotate: 360 }}
-        transition={{ duration: 24, repeat: Infinity, ease: 'linear' }}
-      />
-      <motion.div
-        className="absolute rounded-full pointer-events-none"
-        style={{ width: size * 0.78, height: size * 0.78, border: `1px solid ${main}22` }}
-        animate={{ rotate: -360 }}
-        transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
+        transition={{ duration: 28, repeat: Infinity, ease: 'linear' }}
       />
 
-      {/* Núcleo SVG JARVIS */}
-      <motion.svg
+      {/* Núcleo SVG — tudo estático, menos o core reativo */}
+      <svg
         viewBox="0 0 220 220"
         width={size * 0.9}
         height={size * 0.9}
         xmlns="http://www.w3.org/2000/svg"
-        style={{ position: 'relative', zIndex: 1, scale: ringScale, filter: coreFilter }}
+        style={{ position: 'relative', zIndex: 1 }}
       >
         <defs>
           <radialGradient id="coreGrad" cx="50%" cy="50%" r="50%">
@@ -155,92 +115,50 @@ export default function Avatar({
             <stop offset="35%" stopColor={main} stopOpacity="0.9" />
             <stop offset="100%" stopColor={soft} stopOpacity="0.15" />
           </radialGradient>
-          <linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={main} />
-            <stop offset="100%" stopColor={soft} />
-          </linearGradient>
         </defs>
 
-        {/* Marcações de tick (HUD) */}
+        {/* Marcações de tick reduzidas (12, estáticas) */}
         <g opacity={0.5}>
-          {Array.from({ length: 60 }, (_, i) => {
-            const long = i % 5 === 0;
-            return (
-              <g key={i} transform={`rotate(${i * 6} ${C} ${C})`}>
-                <line
-                  x1={C} y1={18} x2={C} y2={long ? 26 : 22}
-                  stroke={main} strokeWidth={long ? 1.4 : 0.7}
-                  opacity={long ? 0.8 : 0.4}
-                />
-              </g>
-            );
-          })}
-        </g>
-
-        {/* Arcos rotativos do anel médio */}
-        <motion.g
-          style={{ transformOrigin: '110px 110px' }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
-        >
-          <path d="M 110 36 A 74 74 0 0 1 184 110" fill="none" stroke="url(#arcGrad)" strokeWidth="2.5" strokeLinecap="round" opacity="0.85" />
-          <path d="M 110 184 A 74 74 0 0 1 36 110" fill="none" stroke="url(#arcGrad)" strokeWidth="2.5" strokeLinecap="round" opacity="0.85" />
-        </motion.g>
-        <motion.g
-          style={{ transformOrigin: '110px 110px' }}
-          animate={{ rotate: -360 }}
-          transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-        >
-          <circle cx={C} cy={42} r="2.6" fill={main} />
-          <circle cx={C} cy={178} r="2.6" fill={main} />
-        </motion.g>
-
-        {/* Equalizer radial reativo (apontando para dentro) */}
-        <g transform={`translate(${C} ${C})`}>
-          {BAR_WEIGHTS.map((w, i) => (
-            <Bar
-              key={i}
-              angle={(360 / BAR_COUNT) * i}
-              weight={w}
-              amp={amp}
-              color={main}
-              radius={eqRadius}
-            />
+          {Array.from({ length: 12 }, (_, i) => (
+            <g key={i} transform={`rotate(${i * 30} ${C} ${C})`}>
+              <line x1={C} y1={18} x2={C} y2={26} stroke={main} strokeWidth={1.2} opacity={0.7} />
+            </g>
           ))}
         </g>
 
-        {/* Anel interno do núcleo */}
+        {/* Anéis estáticos */}
+        <circle cx={C} cy={C} r="62" fill="none" stroke={`${main}44`} strokeWidth="1" />
         <circle cx={C} cy={C} r="34" fill="none" stroke={main} strokeWidth="1.5" opacity="0.6" />
 
-        {/* Núcleo central — arc reactor, pulsa com a amplitude */}
+        {/* Núcleo central — pulsa com a amplitude */}
         <motion.circle
           cx={C} cy={C} r="26"
           fill="url(#coreGrad)"
           style={{ scale: coreScale, opacity: coreOpacity, transformBox: 'fill-box', transformOrigin: 'center' }}
         />
         <motion.circle
-          cx={C} cy={C} r="12"
+          cx={C} cy={C} r="11"
           fill="#ffffff"
-          style={{ opacity: coreOpacity, scale: coreScale, transformBox: 'fill-box', transformOrigin: 'center' }}
+          style={{ scale: coreScale, opacity: coreOpacity, transformBox: 'fill-box', transformOrigin: 'center' }}
         />
 
-        {/* Scanner durante análise */}
+        {/* Scanner durante análise (transitório) */}
         {status === 'analyzing' && (
           <motion.line
-            x1="44" x2="176" stroke={main} strokeWidth="1.5" opacity="0.5"
-            animate={{ y1: [50, 170, 50], y2: [50, 170, 50] }}
+            x1="48" x2="172" stroke={main} strokeWidth="1.5" opacity="0.5"
+            animate={{ y1: [60, 160, 60], y2: [60, 160, 60] }}
             transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
           />
         )}
 
-        {/* Cantos decorativos HUD */}
-        <g stroke={main} strokeWidth="1.5" fill="none" opacity="0.45">
-          <path d="M 12 12 L 30 12 M 12 12 L 12 30" />
-          <path d="M 208 12 L 190 12 M 208 12 L 208 30" />
-          <path d="M 12 208 L 30 208 M 12 208 L 12 190" />
-          <path d="M 208 208 L 190 208 M 208 208 L 208 190" />
+        {/* Cantos decorativos HUD (estáticos) */}
+        <g stroke={main} strokeWidth="1.5" fill="none" opacity="0.4">
+          <path d="M 14 14 L 30 14 M 14 14 L 14 30" />
+          <path d="M 206 14 L 190 14 M 206 14 L 206 30" />
+          <path d="M 14 206 L 30 206 M 14 206 L 14 190" />
+          <path d="M 206 206 L 190 206 M 206 206 L 206 190" />
         </g>
-      </motion.svg>
+      </svg>
 
       {/* Ícone de reação (sobe e some) */}
       <AnimatePresence>
@@ -248,7 +166,6 @@ export default function Avatar({
           <motion.div
             key={`react-icon-${reactionKey}`}
             className="absolute pointer-events-none z-20"
-            style={{ filter: `drop-shadow(0 0 16px ${reactionColor})` }}
             initial={{ scale: 0, y: 10, opacity: 1 }}
             animate={{ scale: [0, 1.3, 1], y: -size * 0.32, opacity: 0 }}
             transition={{ duration: 1.3, ease: 'easeOut' }}
@@ -266,6 +183,6 @@ export default function Avatar({
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
