@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { Buffer } from 'node:buffer';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -97,6 +98,9 @@ export async function initWhatsApp(): Promise<void> {
 
     sock.ev.on('connection.update', async (update: any) => {
       const current = state();
+      // Ignora eventos de um socket antigo (ex.: após trocar de número), que
+      // poderiam derrubar a conexão nova.
+      if (current.sock && current.sock !== sock) return;
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
@@ -165,6 +169,46 @@ export function getWhatsAppStatus() {
     error: s.lastError,
     connectedAs: s.sock?.user?.id || null,
   };
+}
+
+// Desconecta a conta atual e apaga as credenciais salvas, permitindo parear
+// OUTRO número. Em seguida reinicia a conexão para gerar um novo QR.
+export async function logoutWhatsApp(): Promise<{ ok: boolean; error?: string }> {
+  const s = state();
+
+  try {
+    if (s.sock) {
+      try { await s.sock.logout(); } catch { /* a sessão pode já estar inválida */ }
+      try { s.sock.end?.(undefined); } catch { /* ignore */ }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  if (s.reconnectTimer) {
+    clearTimeout(s.reconnectTimer);
+    s.reconnectTimer = null;
+  }
+
+  // Apaga os arquivos de credencial para que o próximo pareamento seja limpo.
+  const authDir = process.env.BAILEYS_AUTH_DIR || path.join(process.cwd(), '.baileys_auth');
+  try {
+    await fs.rm(authDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+
+  s.sock = null;
+  s.status = 'idle';
+  s.qr = null;
+  s.lastError = null;
+  s.starting = false;
+
+  // Pequena espera para os eventos do socket antigo assentarem, depois reconecta.
+  await delay(400);
+  initWhatsApp().catch(() => {});
+
+  return { ok: true };
 }
 
 // Normaliza número brasileiro para dígitos com DDI 55.

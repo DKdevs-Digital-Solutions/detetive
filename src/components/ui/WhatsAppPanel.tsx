@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react';
 
-// Painel de conexão WhatsApp (Baileys) — exibe status e QR para parear.
+// Painel de conexão WhatsApp (Baileys) — exibe status, QR e permite trocar o número.
 export default function WhatsAppPanel() {
   const [status, setStatus] = useState<string>('idle');
   const [qr, setQr] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [connectedAs, setConnectedAs] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [working, setWorking] = useState(false);
 
   const poll = async () => {
     try {
@@ -15,6 +18,7 @@ export default function WhatsAppPanel() {
       setStatus(data.status);
       setQr(data.qr);
       setError(data.error);
+      setConnectedAs(data.connectedAs || null);
     } catch {
       setStatus('closed');
     }
@@ -30,7 +34,21 @@ export default function WhatsAppPanel() {
     fetch('/api/whatsapp', { method: 'POST' }).then(poll).catch(() => {});
   };
 
+  const disconnect = async () => {
+    setWorking(true);
+    setConfirming(false);
+    try {
+      await fetch('/api/whatsapp', { method: 'DELETE' });
+    } catch {
+      /* ignore */
+    }
+    await poll();
+    setWorking(false);
+  };
+
   const connected = status === 'open';
+  // Mostra só os dígitos do número conectado (ex.: 5511999998888)
+  const connectedNumber = connectedAs ? connectedAs.replace(/[:@].*$/, '') : null;
 
   return (
     <div className="rounded-xl p-4 space-y-3" style={{ background: 'rgba(0,20,40,0.4)', border: '1px solid rgba(0,212,255,0.15)' }}>
@@ -52,10 +70,19 @@ export default function WhatsAppPanel() {
         </span>
       </div>
 
-      {connected ? (
-        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-          Pronto para enviar certificados em PDF pelo WhatsApp do totem.
-        </p>
+      {working ? (
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Desconectando e preparando novo QR...</p>
+      ) : connected ? (
+        <div className="space-y-2">
+          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            Pronto para enviar certificados em PDF pelo WhatsApp do totem.
+          </p>
+          {connectedNumber && (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Número conectado: <span style={{ color: '#25D366' }}>+{connectedNumber}</span>
+            </p>
+          )}
+        </div>
       ) : qr ? (
         <div className="flex flex-col items-center gap-2 py-1">
           <p className="text-xs text-center" style={{ color: 'var(--text-secondary)' }}>
@@ -70,6 +97,39 @@ export default function WhatsAppPanel() {
             {error ? `Erro: ${error}` : 'Iniciando conexão...'}
           </p>
           <button onClick={reconnect} className="btn btn-ghost text-xs py-1.5 px-3">Reconectar</button>
+        </div>
+      )}
+
+      {/* Trocar número / desconectar */}
+      {!working && (
+        <div className="pt-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {confirming ? (
+            <div className="flex flex-col gap-2 pt-2">
+              <p className="text-xs" style={{ color: '#ffaa00' }}>
+                Isso desconecta o número atual e apaga a sessão. Você precisará escanear um novo QR. Continuar?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={disconnect}
+                  className="btn text-xs py-1.5 px-3"
+                  style={{ background: 'rgba(255,51,68,0.15)', border: '1px solid rgba(255,51,68,0.4)', color: '#ff6677' }}
+                >
+                  Sim, desconectar
+                </button>
+                <button onClick={() => setConfirming(false)} className="btn btn-ghost text-xs py-1.5 px-3">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirming(true)}
+              className="btn btn-ghost text-xs py-1.5 px-3 mt-2"
+              style={{ color: '#ff8899', borderColor: 'rgba(255,80,100,0.3)' }}
+            >
+              {connected ? 'Trocar número (desconectar)' : 'Desconectar / limpar sessão'}
+            </button>
+          )}
         </div>
       )}
     </div>

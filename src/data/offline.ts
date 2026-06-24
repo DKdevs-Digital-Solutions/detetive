@@ -15,9 +15,24 @@ export const OFFLINE_QA: OfflineEntry[] = [
       'Inteligência artificial identifica padrões em dados para gerar respostas ou tomar decisões. Ela ajuda em muitas tarefas, mas não entende tudo e pode errar.',
   },
   {
-    keywords: ['fake news', 'notícia falsa', 'desinformação', 'mentira'],
+    keywords: ['primeira fake news', 'primeira notícia falsa', 'história das fake news', 'historia das fake news', 'quando surgiu', 'quando começou', 'quando comecou', 'desde quando', 'mais antiga'],
     answer:
-      'Fake news são informações falsas ou distorcidas apresentadas como verdade. Confira fonte, data e autor, e compare a notícia com veículos confiáveis antes de compartilhar.',
+      'Fake news é bem mais antiga que a internet! Reis e imperadores já espalhavam boatos para enganar o povo. Um caso famoso foi em 1835, quando um jornal de Nova York inventou que havia criaturas vivendo na Lua, e muita gente acreditou. O nome fake news ficou famoso por volta de 2016.',
+  },
+  {
+    keywords: ['deepfake', 'deep fake', 'vídeo falso', 'video falso', 'imagem falsa', 'foto falsa'],
+    answer:
+      'Deepfake é um vídeo ou foto falsa criada por inteligência artificial, que faz parecer que alguém disse ou fez algo que nunca aconteceu. Desconfie de vídeos surpreendentes demais e confira sempre em fontes confiáveis.',
+  },
+  {
+    keywords: ['por que existe', 'por que criam', 'porque criam', 'por que as pessoas', 'pra que serve a fake', 'motivo'],
+    answer:
+      'Tem gente que cria fake news para ganhar dinheiro com cliques, para enganar, assustar ou influenciar o que as pessoas pensam. Por isso é tão importante investigar antes de acreditar ou compartilhar.',
+  },
+  {
+    keywords: ['fake news', 'notícia falsa', 'noticia falsa', 'desinformação', 'desinformacao', 'mentira'],
+    answer:
+      'Fake news são informações falsas ou distorcidas apresentadas como se fossem verdade. Confira a fonte, a data e o autor, e compare a notícia com veículos confiáveis antes de compartilhar.',
   },
   {
     keywords: ['uso responsável', 'usar ia', 'trabalho escolar', 'escola'],
@@ -43,11 +58,6 @@ export const OFFLINE_QA: OfflineEntry[] = [
     keywords: ['checklist', 'lista', 'dicas'],
     answer:
       'O checklist reúne 10 perguntas para verificar notícias. Use-o sempre que encontrar uma informação suspeita.',
-  },
-  {
-    keywords: ['gesto', 'mão', 'câmera', 'webcam'],
-    answer:
-      'Você pode usar gestos: mão aberta pausa, joinha avalia, dedo apontado pede detalhes e movimento circular repete a resposta.',
   },
   {
     keywords: ['oi', 'olá', 'hey', 'bom dia', 'boa tarde', 'boa noite', 'hello'],
@@ -170,5 +180,5 @@ export function getOfflineAnswer(question: string): string {
       return entry.answer;
     }
   }
-  return 'Estou offline agora. Ainda posso explicar que a IA pode errar e ajudar você a reconhecer fake news. Faça uma pergunta sobre esses temas.';
+  return 'Que pergunta interessante, detetive! Eu sou especialista em fake news e inteligência artificial. Me pergunte, por exemplo, o que é uma fake news, quando surgiu a primeira, ou como descobrir se uma notícia é verdadeira.';
 }

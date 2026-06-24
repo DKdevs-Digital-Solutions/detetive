@@ -84,12 +84,6 @@ function AppShell() {
     setScreen(s);
   }, [stopSpeak]);
 
-  // Boas-vindas faladas SOMENTE quando a pessoa toca no botão "ouvir".
-  const playWelcome = useCallback(() => {
-    stopSpeak();
-    speak(WELCOME);
-  }, [speak, stopSpeak]);
-
   // Começa a jornada na primeira fase.
   const startJourney = useCallback(() => navigate(JOURNEY[0]), [navigate]);
 
@@ -119,7 +113,10 @@ function AppShell() {
     stopSpeak();
     setSaverOpen(false);
     setScreen('home');
-  }, [stopSpeak]);
+    // Saudação falada automaticamente, uma vez por sessão. O toque que dispensou
+    // o descanso de tela libera o áudio do navegador, então o autoplay funciona.
+    if (sound) window.setTimeout(() => speak(WELCOME), 300);
+  }, [sound, speak, stopSpeak]);
 
   // Timer de inatividade (configurável; 0 = desligado)
   useEffect(() => {
@@ -173,13 +170,7 @@ function AppShell() {
     switch (screen) {
       case 'home':
         return (
-          <HomeScreen
-            onStart={startJourney}
-            onPlayWelcome={playWelcome}
-            canSpeak={sound}
-            welcomeText={WELCOME}
-            isOnline={isOnline}
-          />
+          <HomeScreen onStart={startJourney} isOnline={isOnline} />
         );
       case 'assistant':
         return <ConversationScreen onAdvance={() => advanceFrom('assistant')} isOnline={isOnline} />;
@@ -197,13 +188,7 @@ function AppShell() {
         return <AdminScreen onNavigate={navigate} />;
       default:
         return (
-          <HomeScreen
-            onStart={startJourney}
-            onPlayWelcome={playWelcome}
-            canSpeak={sound}
-            welcomeText={WELCOME}
-            isOnline={isOnline}
-          />
+          <HomeScreen onStart={startJourney} isOnline={isOnline} />
         );
     }
   };

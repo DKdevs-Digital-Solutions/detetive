@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { initWhatsApp, getWhatsAppStatus } from '@/lib/whatsapp';
+import { initWhatsApp, getWhatsAppStatus, logoutWhatsApp } from '@/lib/whatsapp';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,5 +16,11 @@ export async function GET() {
 // POST → força (re)conexão
 export async function POST() {
   initWhatsApp().catch(() => {});
+  return NextResponse.json(getWhatsAppStatus());
+}
+
+// DELETE → desconecta a conta atual e limpa credenciais (para parear outro número)
+export async function DELETE() {
+  await logoutWhatsApp();
   return NextResponse.json(getWhatsAppStatus());
 }

@@ -6,18 +6,15 @@ import { JOURNEY, PHASE_LABELS } from '@/lib/game';
 
 interface HomeScreenProps {
   onStart: () => void;
-  onPlayWelcome: () => void;
-  canSpeak: boolean;
-  welcomeText: string;
   isOnline: boolean;
 }
 
 /**
  * Tela inicial da jornada (retrato/totem).
- * A mensagem de boas-vindas aparece em TEXTO; a voz só toca quando a pessoa
- * toca em "Ouvir" (não há leitura automática a cada visitante).
+ * A saudação é falada automaticamente uma vez por sessão (disparada ao dispensar
+ * o descanso de tela). Aqui não há texto de boas-vindas — só o convite a começar.
  */
-export default function HomeScreen({ onStart, onPlayWelcome, canSpeak, welcomeText, isOnline }: HomeScreenProps) {
+export default function HomeScreen({ onStart, isOnline }: HomeScreenProps) {
   return (
     <div className="w-full h-full overflow-y-auto flex flex-col items-center justify-center gap-6 px-6 py-8 text-center">
       <motion.div
@@ -40,32 +37,6 @@ export default function HomeScreen({ onStart, onPlayWelcome, canSpeak, welcomeTe
         <p className="text-base sm:text-lg font-medium" style={{ color: 'var(--text-secondary)' }}>
           Tecnologia para investigar o que é real.
         </p>
-      </motion.div>
-
-      {/* Mensagem de boas-vindas em TEXTO + botão de ouvir */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="glass-card p-5 max-w-xl w-full flex flex-col items-center gap-4"
-      >
-        <p className="text-base sm:text-lg leading-relaxed" style={{ color: 'var(--text-primary)' }}>
-          {welcomeText}
-        </p>
-
-        {canSpeak && (
-          <button
-            onClick={onPlayWelcome}
-            className="btn btn-ghost text-sm"
-            style={{ padding: '10px 20px' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M11 5L6 9H2v6h4l5 4V5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            Ouvir a mensagem
-          </button>
-        )}
       </motion.div>
 
       {/* Prévia das fases */}
