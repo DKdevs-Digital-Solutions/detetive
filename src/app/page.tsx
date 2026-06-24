@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Screen } from '@/types';
+import { AnimatePresence } from 'framer-motion';
+import { Screen, BadgeId } from '@/types';
 import HomeScreen from '@/components/screens/HomeScreen';
 import ConversationScreen from '@/components/screens/ConversationScreen';
 import NewsAnalyzerScreen from '@/components/screens/NewsAnalyzerScreen';
@@ -12,12 +13,19 @@ import AdminScreen from '@/components/screens/AdminScreen';
 import CertificateScreen from '@/components/screens/CertificateScreen';
 import StatusBar from '@/components/ui/StatusBar';
 import JourneyProgress from '@/components/ui/JourneyProgress';
+import SealCelebration from '@/components/ui/SealCelebration';
 import SettingsMenu from '@/components/ui/SettingsMenu';
 import ScreenSaver from '@/components/ui/ScreenSaver';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
-import { GameProvider } from '@/context/GameProvider';
+import { GameProvider, useGame } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
 import { JOURNEY } from '@/lib/game';
+
+const PRAISE = [
+  'Muito bem! Você conquistou um selo. Vamos para a próxima fase.',
+  'Boa! Mais um selo na sua jornada de detetive. Seguindo!',
+  'Mandou bem! Selo conquistado. Vamos continuar a investigação.',
+];
 
 const WELCOME =
   'Olá! Eu sou o Detetive. Vamos investigar juntos a inteligência artificial e as fake news. É uma jornada com cinco fases — toque em começar e siga comigo até o final para ganhar seu certificado.';
@@ -34,13 +42,15 @@ export default function App() {
 
 function AppShell() {
   const { idleSeconds, sound } = useSettings();
-  const { speak: speakWelcome, stop: stopWelcome } = useElevenLabsSpeech();
+  const { grantBadge } = useGame();
+  const { speak, stop: stopSpeak } = useElevenLabsSpeech();
 
   const [screen, setScreen] = useState<Screen>('home');
   const [isOnline, setIsOnline] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [saverOpen, setSaverOpen] = useState(true);
   const [speechBusy, setSpeechBusy] = useState(false);
+  const [celebration, setCelebration] = useState<BadgeId | null>(null);
 
   const inJourney = JOURNEY.includes(screen);
 
@@ -70,38 +80,46 @@ function AppShell() {
 
   // ─── Navegação ───────────────────────────────────────────────────────────────
   const navigate = useCallback((s: Screen) => {
-    stopWelcome();
+    stopSpeak();
     setScreen(s);
-  }, [stopWelcome]);
+  }, [stopSpeak]);
 
   // Boas-vindas faladas SOMENTE quando a pessoa toca no botão "ouvir".
   const playWelcome = useCallback(() => {
-    stopWelcome();
-    speakWelcome(WELCOME);
-  }, [speakWelcome, stopWelcome]);
+    stopSpeak();
+    speak(WELCOME);
+  }, [speak, stopSpeak]);
 
   // Começa a jornada na primeira fase.
   const startJourney = useCallback(() => navigate(JOURNEY[0]), [navigate]);
 
-  // Avança para a próxima fase; após a última, vai para o certificado.
+  // Avança para a próxima fase com celebração do selo (Detetive fala "parabéns").
   const advanceFrom = useCallback((from: Screen) => {
     const i = JOURNEY.indexOf(from);
     const next: Screen = i === -1 || i === JOURNEY.length - 1 ? 'certificate' : JOURNEY[i + 1];
-    navigate(next);
-  }, [navigate]);
+    grantBadge(from as BadgeId);
+    stopSpeak();
+    setCelebration(from as BadgeId);
+    if (sound) speak(PRAISE[Math.floor(Math.random() * PRAISE.length)]);
+    window.setTimeout(() => {
+      setCelebration(null);
+      setScreen(next);
+    }, 3000);
+  }, [grantBadge, sound, speak, stopSpeak]);
 
   // ─── Descanso de tela ────────────────────────────────────────────────────────
   const showScreenSaver = useCallback(() => {
-    stopWelcome();
+    stopSpeak();
+    setCelebration(null);
     setScreen('home');
     setSaverOpen(true);
-  }, [stopWelcome]);
+  }, [stopSpeak]);
 
   const dismissScreenSaver = useCallback(() => {
-    stopWelcome();
+    stopSpeak();
     setSaverOpen(false);
     setScreen('home');
-  }, [stopWelcome]);
+  }, [stopSpeak]);
 
   // Timer de inatividade (configurável; 0 = desligado)
   useEffect(() => {
@@ -223,6 +241,11 @@ function AppShell() {
         {inJourney && <JourneyProgress current={screen} />}
         <div className="flex-1 min-h-0">{renderScreen()}</div>
       </div>
+
+      {/* Celebração de selo entre fases */}
+      <AnimatePresence>
+        {celebration && <SealCelebration badge={celebration} />}
+      </AnimatePresence>
 
       {/* Menu de configuração (pressionar o logo por 3 segundos) */}
       <SettingsMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={navigate} />

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Screen, AnalysisResult } from '@/types';
 import TrafficLight from '@/components/ui/TrafficLight';
+import Avatar from '@/components/ui/Avatar';
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
-import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
+import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import { useGame } from '@/context/GameProvider';
 
 interface NewsAnalyzerScreenProps {
@@ -25,8 +26,9 @@ export default function NewsAnalyzerScreen({ onNavigate, onAdvance, isOnline }: 
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const { speak } = useSpeechSynthesis();
+  const { speak, isSpeaking, amplitude } = useElevenLabsSpeech();
   const { grantBadge } = useGame();
+  const didDemoRef = useRef(false);
 
   const analyze = useCallback(async (inputText: string) => {
     if (!inputText.trim()) return;
@@ -62,6 +64,21 @@ export default function NewsAnalyzerScreen({ onNavigate, onAdvance, isOnline }: 
       },
       onInterimResult: (t) => setText(t),
     });
+
+  // O Detetive conduz: explica o semáforo e demonstra com um exemplo,
+  // depois libera para o visitante experimentar.
+  useEffect(() => {
+    if (didDemoRef.current) return;
+    didDemoRef.current = true;
+    const t = setTimeout(() => {
+      speak(
+        'Vou te mostrar como analisar uma notícia. Eu uso um semáforo da confiança: verde é confiável, amarelo pede atenção e vermelho é suspeito. Veja este exemplo.',
+        () => { setText(EXAMPLES[0]); analyze(EXAMPLES[0]); }
+      );
+    }, 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleVoice = () => {
     if (voiceListening) {
@@ -127,8 +144,25 @@ export default function NewsAnalyzerScreen({ onNavigate, onAdvance, isOnline }: 
         )}
       </div>
 
+      {/* Barra do narrador */}
+      <div
+        className="px-6 py-2.5 flex items-center gap-4 shrink-0"
+        style={{ borderBottom: '1px solid rgba(0,212,255,0.08)', background: 'rgba(0,15,30,0.45)' }}
+      >
+        <Avatar status={isSpeaking ? 'responding' : isAnalyzing ? 'analyzing' : 'idle'} isSpeaking={isSpeaking} amplitude={amplitude} size={56} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold" style={{ color: isSpeaking ? '#00ff9d' : '#00d4ff' }}>
+            {isSpeaking ? 'O Detetive está explicando...' : isAnalyzing ? 'Analisando...' : 'Veja o exemplo e depois experimente'}
+          </p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Verde = confiável · Amarelo = atenção · Vermelho = suspeito</p>
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Input area */}
+        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+          🔎 Agora é a sua vez — escolha ou digite uma notícia para analisar:
+        </p>
         <div className="space-y-3">
           <textarea
             value={text}

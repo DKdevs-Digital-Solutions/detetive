@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Screen, QuizQuestion } from '@/types';
 import { QUIZ_QUESTIONS } from '@/data/quiz';
 import { useGame } from '@/context/GameProvider';
+import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 
 interface QuizScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -40,6 +41,7 @@ function buildDeck(): QuizQuestion[] {
 
 export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
   const { grantBadge } = useGame();
+  const { speak, stop: stopSpeaking } = useElevenLabsSpeech();
   const [deck, setDeck] = useState<QuizQuestion[]>(() => buildDeck());
   const [state, setState] = useState<QuizState>('intro');
   const [currentQ, setCurrentQ] = useState(0);
@@ -50,13 +52,29 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
   const question = deck[currentQ];
   const progress = ((currentQ) / deck.length) * 100;
 
+  const spokenQRef = useRef(-1);
+
+  // O Detetive lê cada pergunta em voz alta quando ela aparece.
+  useEffect(() => {
+    if (state === 'question' && question && spokenQRef.current !== currentQ) {
+      spokenQRef.current = currentQ;
+      speak(`${question.question} ${question.options.map((o, i) => `Opção ${String.fromCharCode(65 + i)}: ${o}.`).join(' ')}`);
+    }
+  }, [state, currentQ, question, speak]);
+
+  // Para a fala ao sair da fase.
+  useEffect(() => () => { stopSpeaking(); }, [stopSpeaking]);
+
   const handleSelect = (idx: number) => {
     if (selected !== null) return;
     setSelected(idx);
     const newAnswers = [...answers];
     newAnswers[currentQ] = idx;
     setAnswers(newAnswers);
-    if (idx === question.correct) setScore((s) => s + 1);
+    const correct = idx === question.correct;
+    if (correct) setScore((s) => s + 1);
+    // O Detetive reage e lê a explicação (mais fala que leitura).
+    speak(`${correct ? 'Isso! Resposta certa.' : 'Quase! Olha só.'} ${question.explanation}`);
   };
 
   const handleNext = () => {
@@ -74,6 +92,8 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
   };
 
   const handleRestart = () => {
+    stopSpeaking();
+    spokenQRef.current = -1;
     setDeck(buildDeck()); // nova ordem de perguntas e respostas
     setState('intro');
     setCurrentQ(0);
