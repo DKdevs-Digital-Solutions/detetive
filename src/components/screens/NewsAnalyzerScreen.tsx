@@ -7,6 +7,7 @@ import TrafficLight from '@/components/ui/TrafficLight';
 import Avatar from '@/components/ui/Avatar';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import { useGame } from '@/context/GameProvider';
+import { NEWS_LESSONS, NEWS_INTRO, NEWS_CLOSING } from '@/data/news';
 
 interface NewsAnalyzerScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -14,63 +15,11 @@ interface NewsAnalyzerScreenProps {
   isOnline?: boolean;
 }
 
-interface Lesson {
-  headline: string;
-  level: ConfidenceLevel;
-  verdict: string;
-  clues: string[];
-  speech: string;
-}
-
-const INTRO =
-  'Toda notícia deixa pistas, como num caso de detetive. Eu uso um semáforo da confiança: verde é confiável, amarelo pede atenção, e vermelho é perigo. Vou te mostrar três exemplos. Preste atenção nas pistas.';
-const CLOSING =
-  'Pegou o jeito? Sempre confira a fonte, a data, e desconfie de títulos exagerados. Na dúvida, não compartilhe. Quando terminar de ler, toque em continuar.';
-
-const LESSONS: Lesson[] = [
-  {
-    headline: 'URGENTE: Cientistas descobrem fruta que cura TODAS as doenças. Médicos estão chocados!',
-    level: 'red',
-    verdict: 'Sinal vermelho — provável fake news',
-    clues: [
-      'Palavras exageradas: URGENTE, cura TODAS, chocados',
-      'Promessa milagrosa, boa demais para ser verdade',
-      'Nenhuma fonte ou estudo citado',
-    ],
-    speech:
-      'Olha esta manchete: cientistas descobrem uma fruta que cura todas as doenças, e os médicos estão chocados. Percebe o exagero? Palavras como urgente e cura tudo, uma promessa boa demais, e nenhuma fonte. Isso é sinal vermelho, quase certeza de fake news.',
-  },
-  {
-    headline: 'Estudo afirma que ficar acordado até tarde faz mal para a memória.',
-    level: 'yellow',
-    verdict: 'Sinal amarelo — precisa verificar',
-    clues: [
-      'Até pode ser verdade, mas...',
-      'Qual estudo? Quem fez? Em que ano?',
-      'Sem fonte clara para a gente conferir',
-    ],
-    speech:
-      'Agora esta: um estudo afirma que ficar acordado até tarde faz mal para a memória. Pode até ser verdade, mas qual estudo é esse? Quem fez? Quando? Faltam informações para confirmar. Isso é sinal amarelo: pesquise mais antes de acreditar.',
-  },
-  {
-    headline: 'Segundo a Fiocruz, em 2024, a vacinação reduziu os casos de sarampo no Brasil.',
-    level: 'green',
-    verdict: 'Sinal verde — boa cara de confiável',
-    clues: [
-      'Fonte confiável citada: Fiocruz',
-      'Tem data: 2024',
-      'Linguagem calma e equilibrada, sem exageros',
-    ],
-    speech:
-      'E esta: segundo a Fiocruz, em 2024, a vacinação reduziu os casos de sarampo no Brasil. Aqui temos uma fonte confiável, uma data, e linguagem tranquila, sem exageros. Isso é sinal verde, com boa cara de confiável. Mesmo assim, sempre vale conferir.',
-  },
-];
-
 const LEVEL_COLOR: Record<ConfidenceLevel, string> = { green: '#00dd44', yellow: '#ffaa00', red: '#ff3344' };
 
 export default function NewsAnalyzerScreen({ onNavigate, onAdvance }: NewsAnalyzerScreenProps) {
   const { grantBadge } = useGame();
-  const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
+  const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -81,15 +30,15 @@ export default function NewsAnalyzerScreen({ onNavigate, onAdvance }: NewsAnalyz
   const runIdRef = useRef(0);
   const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const speakRef = useRef(speak);
-  useEffect(() => { speakRef.current = speak; }, [speak]);
+  const playClipRef = useRef(playClip);
+  useEffect(() => { playClipRef.current = playClip; }, [playClip]);
 
-  const speakAndWait = (text: string, runId: number) =>
+  const speakAndWait = (id: string, text: string, runId: number) =>
     new Promise<void>((resolve) => {
       if (!playingRef.current || runId !== runIdRef.current) { resolve(); return; }
       let completed = false;
       const finish = () => { if (completed) return; completed = true; resolve(); };
-      speakRef.current(text, finish);
+      playClipRef.current(id, text, finish);
     });
 
   const startNarration = async () => {
@@ -103,15 +52,15 @@ export default function NewsAnalyzerScreen({ onNavigate, onAdvance }: NewsAnalyz
     stopSpeaking();
     grantBadge('news');
 
-    await speakAndWait(INTRO, runId);
+    await speakAndWait('news-intro', NEWS_INTRO, runId);
     if (!playingRef.current || runId !== runIdRef.current) return;
 
-    for (let i = 0; i < LESSONS.length; i += 1) {
+    for (let i = 0; i < NEWS_LESSONS.length; i += 1) {
       if (!playingRef.current || runId !== runIdRef.current) return;
       setCurrentIndex(i);
       setRevealed((prev) => { const next = new Set(prev); next.add(i); return next; });
       cardRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await speakAndWait(LESSONS[i].speech, runId);
+      await speakAndWait(`news-${i}`, NEWS_LESSONS[i].speech, runId);
       if (!playingRef.current || runId !== runIdRef.current) return;
       // Pausa para ler as pistas com calma antes da próxima.
       await new Promise<void>((r) => setTimeout(r, 3500));
@@ -119,7 +68,7 @@ export default function NewsAnalyzerScreen({ onNavigate, onAdvance }: NewsAnalyz
 
     if (!playingRef.current || runId !== runIdRef.current) return;
     setCurrentIndex(-1);
-    await speakAndWait(CLOSING, runId);
+    await speakAndWait('news-closing', NEWS_CLOSING, runId);
 
     if (!playingRef.current || runId !== runIdRef.current) return;
     playingRef.current = false;
@@ -170,7 +119,7 @@ export default function NewsAnalyzerScreen({ onNavigate, onAdvance }: NewsAnalyz
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-3">
-        {LESSONS.map((l, i) => {
+        {NEWS_LESSONS.map((l, i) => {
           const show = revealed.has(i);
           const isCurrent = currentIndex === i;
           const color = LEVEL_COLOR[l.level];

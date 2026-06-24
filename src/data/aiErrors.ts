@@ -42,19 +42,19 @@ export const AI_ERROR_EXAMPLES: AIErrorExample[] = [
     correctAnswer:
       'Sem contexto, a IA não sabe se você fala de banco financeiro, banco de praça ou banco de dados. A resposta pode ser completamente equivocada.',
     explanation:
-      'Perguntas ambíguas confundem a IA. Ela escolhe uma interpretação e responde com confiança, mesmo que seja a interpretação errada.',
+      'Quando uma pergunta pode ter mais de um significado, a IA fica confusa. Ela escolhe um significado e responde com confiança, mesmo que seja o errado.',
     color: '#ffaa00',
   },
   {
     id: 4,
-    category: 'Viés nos dados',
-    question: 'Quem é melhor para trabalhar em TI?',
+    category: 'Preconceito nos dados',
+    question: 'Quem é melhor para trabalhar com computadores?',
     wrongAnswer:
-      'Responde de forma tendenciosa refletindo padrões históricos de discriminação presentes nos dados de treinamento.',
+      'Responde dando preferência a um grupo de pessoas, repetindo preconceitos que estavam nas informações com que ela aprendeu.',
     correctAnswer:
-      'Qualquer pessoa, independentemente de gênero, raça ou origem, pode ser excelente profissional de TI. A IA pode refletir preconceitos históricos.',
+      'Qualquer pessoa, seja menino ou menina, de qualquer cor ou lugar, pode ser ótima com computadores. A IA às vezes repete preconceitos antigos.',
     explanation:
-      'Se os dados de treinamento contêm vieses sociais, a IA aprende e reproduz esses vieses. Por isso o uso responsável exige análise crítica.',
+      'Se a IA aprende com informações cheias de preconceito, ela acaba repetindo esse preconceito. Por isso é preciso sempre pensar com a própria cabeça.',
     color: '#ff3344',
   },
   {
@@ -70,3 +70,12 @@ export const AI_ERROR_EXAMPLES: AIErrorExample[] = [
     color: '#ff3344',
   },
 ];
+
+// ─── Narração fixa (pré-gravável em MP3) ───────────────────────────────────────
+export const AIERR_INTRO =
+  'Você sabia que a inteligência artificial pode errar? Vou te mostrar alguns tipos de erro que ela comete. Preste atenção em cada um.';
+export const AIERR_CLOSING =
+  'Viu só? A IA ajuda muito, mas não substitui o pensamento humano. Sempre verifique, compare e reflita. Quando estiver pronto, toque em continuar.';
+
+export const aiErrLine = (ex: AIErrorExample): string =>
+  `${ex.category}. Imagine perguntar à inteligência artificial: ${ex.question} Ela pode responder com muita confiança, mas errado, como você vê aí na tela. O certo é: ${ex.correctAnswer} Isso acontece porque ${ex.explanation}`;

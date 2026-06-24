@@ -6,31 +6,16 @@ import { Screen } from '@/types';
 import { useGame } from '@/context/GameProvider';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import Avatar from '@/components/ui/Avatar';
+import { CHECKLIST_ITEMS, CHECKLIST_INTRO, CHECKLIST_CLOSING } from '@/data/checklist';
 
 interface ChecklistScreenProps {
   onNavigate: (screen: Screen) => void;
   onAdvance: () => void;
 }
 
-const CHECKLIST_ITEMS = [
-  { id: 1, question: 'Quem publicou essa informação?', detail: 'A fonte é um veículo conhecido, instituto de pesquisa ou órgão oficial?' },
-  { id: 2, question: 'Existe uma fonte confiável citada?', detail: 'A notícia cita a origem dos dados? Dá para verificar?' },
-  { id: 3, question: 'A notícia tem data de publicação?', detail: 'Notícias antigas podem ser recompartilhadas fora de contexto.' },
-  { id: 4, question: 'O autor é identificado?', detail: 'Há um jornalista ou especialista responsável pelo conteúdo?' },
-  { id: 5, question: 'O título parece exagerado?', detail: 'Títulos como CHOQUE, INCRÍVEL ou SEGREDO REVELADO são sinais de alerta.' },
-  { id: 6, question: 'A informação aparece em outros sites confiáveis?', detail: 'Pesquise a notícia em pelo menos três fontes diferentes e conhecidas.' },
-  { id: 7, question: 'A imagem pode estar fora de contexto?', detail: 'Fotos de eventos antigos são frequentemente usadas em notícias falsas.' },
-  { id: 8, question: 'A notícia tenta causar medo, raiva ou urgência?', detail: 'Emoções fortes são usadas para impedir o pensamento crítico.' },
-  { id: 9, question: 'A informação apresenta dados ou apenas opinião?', detail: 'Dados verificáveis tornam a informação mais confiável.' },
-  { id: 10, question: 'A IA explicou de onde veio a resposta?', detail: 'IAs devem indicar a origem de suas informações. Se não o fizer, desconfie.' },
-];
-
-const INTRO = 'Vou te ensinar a desconfiar de notícias falsas. Preste atenção em cada ponto que eu vou marcar.';
-const CLOSING = 'Pronto! Quanto mais respostas sim, mais confiável é a notícia. Na dúvida, não compartilhe.';
-
 export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScreenProps) {
   const { grantBadge } = useGame();
-  const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
+  const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [playing, setPlaying] = useState(false);
@@ -43,15 +28,15 @@ export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScre
   const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Mantém a versão mais recente da função de voz sem reiniciar a sequência.
-  const speakRef = useRef(speak);
-  useEffect(() => { speakRef.current = speak; }, [speak]);
+  const playClipRef = useRef(playClip);
+  useEffect(() => { playClipRef.current = playClip; }, [playClip]);
 
   // Selo da jornada: concedido ao avaliar metade ou mais dos critérios.
   useEffect(() => {
     if (checked.size >= 5) grantBadge('checklist');
   }, [checked, grantBadge]);
 
-  const speakAndWait = (text: string, runId: number) =>
+  const speakAndWait = (id: string, text: string, runId: number) =>
     new Promise<void>((resolve) => {
       if (!playingRef.current || runId !== runIdRef.current) {
         resolve();
@@ -65,9 +50,8 @@ export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScre
         resolve();
       };
 
-      // O próximo trecho só é liberado pelo callback real de término do TTS.
-      // Não existe mais temporizador que possa cortar a introdução ou um item.
-      speakRef.current(text, finish);
+      // O próximo trecho só é liberado pelo callback real de término do áudio.
+      playClipRef.current(id, text, finish);
     });
 
   const startNarration = async () => {
@@ -80,7 +64,7 @@ export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScre
     setNarrationStage('intro');
     stopSpeaking();
 
-    await speakAndWait(INTRO, runId);
+    await speakAndWait('checklist-intro', CHECKLIST_INTRO, runId);
     if (!playingRef.current || runId !== runIdRef.current) return;
 
     setNarrationStage('criteria');
@@ -97,35 +81,22 @@ export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScre
       });
       itemRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-      await speakAndWait(`${item.question} ${item.detail}`, runId);
+      await speakAndWait(`checklist-${i}`, `${item.question} ${item.detail}`, runId);
       if (!playingRef.current || runId !== runIdRef.current) return;
 
-      // Pequena pausa visual, sem antecipar ou interromper a voz.
-      await new Promise<void>((resolve) => setTimeout(resolve, 220));
+      // Pausa para dar tempo de ler o critério antes do próximo áudio.
+      await new Promise<void>((resolve) => setTimeout(resolve, 1800));
     }
 
     if (!playingRef.current || runId !== runIdRef.current) return;
     setCurrentIndex(-1);
     setNarrationStage('closing');
-    await speakAndWait(CLOSING, runId);
+    await speakAndWait('checklist-closing', CHECKLIST_CLOSING, runId);
 
     if (!playingRef.current || runId !== runIdRef.current) return;
     playingRef.current = false;
     setPlaying(false);
     setNarrationStage('done');
-  };
-
-  const stopNarration = () => {
-    runIdRef.current += 1;
-    playingRef.current = false;
-    setPlaying(false);
-    setCurrentIndex(-1);
-    setNarrationStage('done');
-    if (startTimerRef.current) {
-      clearTimeout(startTimerRef.current);
-      startTimerRef.current = null;
-    }
-    stopSpeaking();
   };
 
   // Inicia sozinho ao abrir a tela. A introdução é sempre o primeiro áudio.
@@ -157,8 +128,6 @@ export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScre
       : count >= 5
       ? { text: 'Verifique mais antes de compartilhar.', color: '#ffaa00' }
       : { text: 'Muitos sinais suspeitos. Não compartilhe!', color: '#ff3344' };
-
-  const reset = () => { stopNarration(); setChecked(new Set()); };
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
@@ -275,17 +244,12 @@ export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScre
             {verdict.text}
           </motion.p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={reset} className="btn btn-ghost text-xs py-2 px-4">
-            Reiniciar
-          </button>
-          <button onClick={onAdvance} className="btn btn-primary text-sm py-2 px-5">
-            Continuar
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
+        <button onClick={onAdvance} className="btn btn-primary text-sm py-2 px-5">
+          Continuar
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       </div>
     </div>
   );

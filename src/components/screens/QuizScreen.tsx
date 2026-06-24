@@ -48,17 +48,25 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(Array(deck.length).fill(null));
+  const [canAnswer, setCanAnswer] = useState(false);
 
   const question = deck[currentQ];
   const progress = ((currentQ) / deck.length) * 100;
 
   const spokenQRef = useRef(-1);
 
-  // O Detetive lê cada pergunta em voz alta quando ela aparece.
+  // O Detetive lê cada pergunta em voz alta; só libera as respostas ao terminar.
   useEffect(() => {
     if (state === 'question' && question && spokenQRef.current !== currentQ) {
       spokenQRef.current = currentQ;
-      speak(`${question.question} ${question.options.map((o, i) => `Opção ${String.fromCharCode(65 + i)}: ${o}.`).join(' ')}`);
+      setCanAnswer(false);
+      const optionsText = question.options.map((o, i) => `Opção ${String.fromCharCode(65 + i)}: ${o}.`).join(' ');
+      let unlocked = false;
+      const unlock = () => { if (!unlocked) { unlocked = true; setCanAnswer(true); } };
+      speak(`${question.question} ${optionsText}`, unlock);
+      // Segurança: libera mesmo se o áudio falhar ou não terminar.
+      const safety = setTimeout(unlock, 15000);
+      return () => clearTimeout(safety);
     }
   }, [state, currentQ, question, speak]);
 
@@ -66,7 +74,7 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
   useEffect(() => () => { stopSpeaking(); }, [stopSpeaking]);
 
   const handleSelect = (idx: number) => {
-    if (selected !== null) return;
+    if (selected !== null || !canAnswer) return;
     setSelected(idx);
     const newAnswers = [...answers];
     newAnswers[currentQ] = idx;
@@ -94,6 +102,7 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
   const handleRestart = () => {
     stopSpeaking();
     spokenQRef.current = -1;
+    setCanAnswer(false);
     setDeck(buildDeck()); // nova ordem de perguntas e respostas
     setState('intro');
     setCurrentQ(0);
@@ -205,8 +214,27 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
                 </h3>
               </div>
 
+              {/* Aviso enquanto o Detetive lê a pergunta */}
+              {!canAnswer && selected === null && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center justify-center gap-2 text-sm font-semibold"
+                  style={{ color: '#00d4ff' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M11 5L6 9H2v6h4l5 4V5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  Ouça o Detetive ler a pergunta...
+                </motion.div>
+              )}
+
               {/* Options */}
-              <div className="space-y-3">
+              <div
+                className="space-y-3"
+                style={{ opacity: canAnswer ? 1 : 0.45, pointerEvents: canAnswer ? 'auto' : 'none', transition: 'opacity 0.3s' }}
+              >
                 {question.options.map((opt, idx) => {
                   const isCorrect = idx === question.correct;
                   const isSelected = idx === selected;

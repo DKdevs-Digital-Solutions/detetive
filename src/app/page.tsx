@@ -19,12 +19,7 @@ import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import { GameProvider, useGame } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
 import { JOURNEY } from '@/lib/game';
-
-const PRAISE = [
-  'Muito bem! Você conquistou um selo. Vamos para a próxima fase.',
-  'Boa! Mais um selo na sua jornada de detetive. Seguindo!',
-  'Mandou bem! Selo conquistado. Vamos continuar a investigação.',
-];
+import { PRAISE } from '@/data/narration';
 
 export default function App() {
   return (
@@ -39,7 +34,7 @@ export default function App() {
 function AppShell() {
   const { idleSeconds, sound } = useSettings();
   const { grantBadge, resetJourney } = useGame();
-  const { speak, stop: stopSpeak } = useElevenLabsSpeech();
+  const { playClip, stop: stopSpeak } = useElevenLabsSpeech();
 
   const [screen, setScreen] = useState<Screen>('home');
   const [isOnline, setIsOnline] = useState(true);
@@ -89,12 +84,15 @@ function AppShell() {
     grantBadge(from as BadgeId);
     stopSpeak();
     setCelebration(from as BadgeId);
-    if (sound) speak(PRAISE[Math.floor(Math.random() * PRAISE.length)]);
+    if (sound) {
+      const i = Math.floor(Math.random() * PRAISE.length);
+      playClip(`praise-${i}`, PRAISE[i]);
+    }
     window.setTimeout(() => {
       setCelebration(null);
       setScreen(next);
     }, 3000);
-  }, [grantBadge, sound, speak, stopSpeak]);
+  }, [grantBadge, sound, playClip, stopSpeak]);
 
   // ─── Inatividade → reinicia a sessão ─────────────────────────────────────────
   // Substitui o antigo descanso de tela: ao ficar ocioso, limpa o progresso do

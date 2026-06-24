@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Screen } from '@/types';
-import { AI_ERROR_EXAMPLES } from '@/data/aiErrors';
+import { AI_ERROR_EXAMPLES, AIERR_INTRO, AIERR_CLOSING, aiErrLine } from '@/data/aiErrors';
 import { useGame } from '@/context/GameProvider';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import Avatar from '@/components/ui/Avatar';
@@ -17,18 +17,13 @@ const CATEGORY_ICONS: Record<string, string> = {
   Alucinação: '👻',
   'Informação desatualizada': '🕰️',
   'Contexto insuficiente': '❓',
-  'Viés nos dados': '⚖️',
+  'Preconceito nos dados': '⚖️',
   'Fonte inexistente': '📭',
 };
 
-const INTRO =
-  'Você sabia que a inteligência artificial pode errar? Vou te mostrar alguns tipos de erro que ela comete. Preste atenção em cada um.';
-const CLOSING =
-  'Viu só? A IA ajuda muito, mas não substitui o pensamento humano. Sempre verifique, compare e reflita. Quando estiver pronto, toque em continuar.';
-
 export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreenProps) {
   const { grantBadge } = useGame();
-  const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
+  const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
   const [opened, setOpened] = useState<Set<number>>(new Set());
   const [playing, setPlaying] = useState(false);
@@ -39,15 +34,15 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
   const runIdRef = useRef(0);
   const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const speakRef = useRef(speak);
-  useEffect(() => { speakRef.current = speak; }, [speak]);
+  const playClipRef = useRef(playClip);
+  useEffect(() => { playClipRef.current = playClip; }, [playClip]);
 
-  const speakAndWait = (text: string, runId: number) =>
+  const speakAndWait = (id: string, text: string, runId: number) =>
     new Promise<void>((resolve) => {
       if (!playingRef.current || runId !== runIdRef.current) { resolve(); return; }
       let completed = false;
       const finish = () => { if (completed) return; completed = true; resolve(); };
-      speakRef.current(text, finish);
+      playClipRef.current(id, text, finish);
     });
 
   const startNarration = async () => {
@@ -61,7 +56,7 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
     stopSpeaking();
     grantBadge('ai-errors'); // selo da jornada (o Detetive está conduzindo)
 
-    await speakAndWait(INTRO, runId);
+    await speakAndWait('aierr-intro', AIERR_INTRO, runId);
     if (!playingRef.current || runId !== runIdRef.current) return;
 
     for (let i = 0; i < AI_ERROR_EXAMPLES.length; i += 1) {
@@ -71,10 +66,7 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
       // Mantém os cartões já abertos abertos (a tela é grande e ajuda a ler).
       setOpened((prev) => { const next = new Set(prev); next.add(ex.id); return next; });
       cardRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await speakAndWait(
-        `${ex.category}. Imagine perguntar à inteligência artificial: ${ex.question} Ela pode responder com muita confiança, mas errado, como você vê aí na tela. O certo é: ${ex.correctAnswer} Isso acontece porque ${ex.explanation}`,
-        runId,
-      );
+      await speakAndWait(`aierr-${i}`, aiErrLine(ex), runId);
       if (!playingRef.current || runId !== runIdRef.current) return;
       // Pausa generosa para dar tempo de LER o exemplo na tela antes de trocar de cartão.
       const readMs = Math.min(7000, Math.max(4000, ex.wrongAnswer.length * 50));
@@ -83,7 +75,7 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
 
     if (!playingRef.current || runId !== runIdRef.current) return;
     setCurrentIndex(-1);
-    await speakAndWait(CLOSING, runId);
+    await speakAndWait('aierr-closing', AIERR_CLOSING, runId);
 
     if (!playingRef.current || runId !== runIdRef.current) return;
     playingRef.current = false;

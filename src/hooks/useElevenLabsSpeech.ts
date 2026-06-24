@@ -273,6 +273,48 @@ export function useElevenLabsSpeech() {
     [isSupported, ensureContext, fetchAudio, playBuffer, startAmpLoop, stopAmpLoop, speakFallback, amplitude, announceSpeaking]
   );
 
+  // ─── Áudio pré-gravado (MP3 fixo) com fallback para a voz ao vivo ─────────────
+  // Toca /audio/<id>.mp3 se existir (sem custo de ElevenLabs). Se faltar o
+  // arquivo, usa speak() ao vivo. A reatividade do avatar (amplitude) é a mesma.
+  const playClip = useCallback(
+    async (id: string, fallbackText: string, onEnd?: () => void) => {
+      if (!isSupported) { onEnd?.(); return; }
+
+      cancelledRef.current = false;
+      try { sourceRef.current?.stop(); } catch {}
+      sourceRef.current = null;
+
+      try {
+        const res = await fetch(`/audio/${id}.mp3`, { cache: 'force-cache' });
+        if (res.ok) {
+          const arr = await res.arrayBuffer();
+          if (arr.byteLength > 0) {
+            const ctx = ensureContext();
+            if (ctx.state === 'suspended') { try { await ctx.resume(); } catch {} }
+            const buffer = await ctx.decodeAudioData(arr);
+            if (cancelledRef.current) { setIsSpeaking(false); announceSpeaking(false); return; }
+
+            setUsingNeural(true);
+            setIsSpeaking(true);
+            announceSpeaking(true);
+            startAmpLoop();
+            await playBuffer(buffer);
+            stopAmpLoop();
+            setIsSpeaking(false);
+            announceSpeaking(false);
+            if (!cancelledRef.current) onEnd?.();
+            return;
+          }
+        }
+      } catch {
+        /* sem MP3 ou falha de decodificação → cai para a voz ao vivo */
+      }
+
+      speak(fallbackText, onEnd);
+    },
+    [isSupported, ensureContext, playBuffer, startAmpLoop, stopAmpLoop, announceSpeaking, speak]
+  );
+
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
@@ -286,5 +328,5 @@ export function useElevenLabsSpeech() {
     };
   }, [announceSpeaking]);
 
-  return { speak, stop, isSpeaking, amplitude: amplitude as MotionValue<number>, isSupported, usingNeural };
+  return { speak, playClip, stop, isSpeaking, amplitude: amplitude as MotionValue<number>, isSupported, usingNeural };
 }
