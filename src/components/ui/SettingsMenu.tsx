@@ -125,6 +125,19 @@ export default function SettingsMenu({ open, onClose, onNavigate }: Props) {
                 </div>
               </div>
 
+              {/* Controlador (tablet fixo) */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Controlador (tablet)</p>
+                <div className="rounded-xl p-4" style={{ background: 'rgba(0,20,40,0.4)', border: '1px solid rgba(0,212,255,0.15)' }}>
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    No tablet, abra o endereço abaixo — ele <strong style={{ color: '#00d4ff' }}>pareia automaticamente</strong> e acompanha a jornada (avançar fases e teclado do certificado):
+                  </p>
+                  <p className="text-sm font-semibold" style={{ color: '#00d4ff' }}>
+                    {typeof window !== 'undefined' ? `${window.location.origin}/controle` : '/controle'}
+                  </p>
+                </div>
+              </div>
+
               {/* WhatsApp */}
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>WhatsApp</p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Screen, BadgeId } from '@/types';
 import HomeScreen from '@/components/screens/HomeScreen';
@@ -20,6 +20,7 @@ import { GameProvider, useGame } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
 import { JOURNEY } from '@/lib/game';
 import { PRAISE } from '@/data/narration';
+import { CONTROL_ROOM } from '@/lib/control';
 
 export default function App() {
   return (
@@ -43,6 +44,9 @@ function AppShell() {
   const [celebration, setCelebration] = useState<BadgeId | null>(null);
 
   const inJourney = JOURNEY.includes(screen);
+
+  const screenRef = useRef<Screen>('home');
+  useEffect(() => { screenRef.current = screen; }, [screen]);
 
   // Estado global de fala: qualquer tela pode bloquear o reconhecimento de ordens
   // enquanto o Detetive estiver lendo ou respondendo.
@@ -151,6 +155,54 @@ function AppShell() {
     // Inicia o Baileys ao abrir o totem, sem depender de alguém entrar no painel admin.
     fetch('/api/whatsapp').catch(() => {});
   }, []);
+
+  // ─── Controle remoto (tablet fixo, sala fixa — sem código) ───────────────────
+  // O controlador (/controle) acompanha a jornada e envia ações sequenciais.
+  const handleControl = useCallback((cmd: { type?: string; screen?: Screen }) => {
+    window.dispatchEvent(new Event('detetive:keepalive'));
+    if (cmd.type === 'start') {
+      startJourney();
+    } else if (cmd.type === 'advance') {
+      const s = screenRef.current;
+      if (JOURNEY.includes(s)) advanceFrom(s); // avança a fase sequencial atual
+    } else if (cmd.type === 'restart') {
+      restartSession();
+    } else if (cmd.type === 'navigate' && cmd.screen) {
+      navigate(cmd.screen);
+    } else if (cmd.type === 'hello') {
+      fetch('/api/control/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: CONTROL_ROOM, command: { from: 'display', type: 'state', screen: screenRef.current } }),
+      }).catch(() => {});
+    }
+  }, [startJourney, advanceFrom, restartSession, navigate]);
+
+  const handleControlRef = useRef(handleControl);
+  useEffect(() => { handleControlRef.current = handleControl; }, [handleControl]);
+
+  useEffect(() => {
+    const es = new EventSource(`/api/control/stream?code=${encodeURIComponent(CONTROL_ROOM)}`);
+    es.onmessage = (e) => {
+      try {
+        const cmd = JSON.parse(e.data);
+        if (!cmd || cmd.from !== 'controller') return; // ignora os próprios broadcasts
+        handleControlRef.current(cmd);
+      } catch {
+        /* ignore */
+      }
+    };
+    return () => es.close();
+  }, []);
+
+  // Transmite a fase atual para o controlador acompanhar a jornada.
+  useEffect(() => {
+    fetch('/api/control/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CONTROL_ROOM, command: { from: 'display', type: 'state', screen } }),
+    }).catch(() => {});
+  }, [screen]);
 
   const renderScreen = () => {
     switch (screen) {
