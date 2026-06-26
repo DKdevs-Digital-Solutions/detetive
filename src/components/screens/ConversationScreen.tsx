@@ -135,6 +135,12 @@ export default function ConversationScreen({ onAdvance, isOnline }: Props) {
   // Mantém o ref apontando para a versão mais recente de beginListening.
   useEffect(() => { beginListeningRef.current = beginListening; }, [beginListening]);
 
+  // Avisa o controle remoto: libera "Continuar" (ir ao certificado) quando o
+  // Detetive está ouvindo — não no meio da saudação/pensando/respondendo.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('detetive:phase-ready', { detail: { ready: phase === 'listening' } }));
+  }, [phase]);
+
   // Saudação inicial → começa a ouvir
   useEffect(() => {
     grantBadge('assistant');

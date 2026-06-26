@@ -83,6 +83,11 @@ export default function AIErrorsScreen({ onNavigate, onAdvance }: AIErrorsScreen
     setDone(true);
   };
 
+  // Avisa o controle remoto: só libera "Continuar" quando a explicação termina.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('detetive:phase-ready', { detail: { ready: done } }));
+  }, [done]);
+
   // Inicia a narração ao abrir a fase.
   useEffect(() => {
     startTimerRef.current = setTimeout(() => { void startNarration(); }, 700);

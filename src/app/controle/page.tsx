@@ -2,8 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { JOURNEY, PHASE_LABELS } from '@/lib/game';
+import { BadgeId } from '@/types';
+import { JOURNEY, PHASE_LABELS, BADGES } from '@/lib/game';
 import Avatar from '@/components/ui/Avatar';
+import BadgeSeal from '@/components/ui/BadgeSeal';
+import SealCelebration from '@/components/ui/SealCelebration';
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 const EXTRA_LABEL: Record<string, string> = {
   home: 'Tela inicial',
@@ -21,10 +26,17 @@ export default function ControlPage() {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState<Status>('loading');
   const [displayScreen, setDisplayScreen] = useState<string>('home');
+  const [displayReady, setDisplayReady] = useState(false);
   const [online, setOnline] = useState(false);
+
+  // Selos espelhados do totem + animação de conquista.
+  const [badges, setBadges] = useState<BadgeId[]>([]);
+  const [celebration, setCelebration] = useState<BadgeId | null>(null);
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [channel, setChannel] = useState<'whatsapp' | 'email'>('whatsapp');
   const [sending, setSending] = useState(false);
   const [certMsg, setCertMsg] = useState('');
   const [sent, setSent] = useState(false);
@@ -92,7 +104,12 @@ export default function ControlPage() {
         const cmd = JSON.parse(e.data);
         if (cmd?.from === 'display' && cmd.type === 'state' && cmd.screen) {
           setDisplayScreen(cmd.screen);
+          setDisplayReady(!!cmd.ready);
+          if (Array.isArray(cmd.badges)) setBadges(cmd.badges);
           if (cmd.screen !== 'certificate') { setSent(false); setCertMsg(''); }
+        } else if (cmd?.from === 'display' && cmd.type === 'badge' && cmd.badge) {
+          setCelebration(cmd.badge);
+          setBadges((prev) => (prev.includes(cmd.badge) ? prev : [...prev, cmd.badge]));
         }
       } catch { /* ignore */ }
     };
@@ -115,29 +132,45 @@ export default function ControlPage() {
     return () => { alive = false; clearInterval(t); };
   }, [code]);
 
+  // Limpa a animação do selo conquistado após o tempo de exibição.
+  useEffect(() => {
+    if (!celebration) return;
+    const t = setTimeout(() => setCelebration(null), 3000);
+    return () => clearTimeout(t);
+  }, [celebration]);
+
   const sendCertificate = async () => {
-    if (!name.trim() || phone.replace(/\D/g, '').length < 10) {
-      setCertMsg('Preencha o nome e um número válido (com DDD).');
+    if (!name.trim()) { setCertMsg('Digite o seu nome.'); return; }
+    if (channel === 'whatsapp' && phone.replace(/\D/g, '').length < 10) {
+      setCertMsg('Número inválido (com DDD).');
+      return;
+    }
+    if (channel === 'email' && !EMAIL_RE.test(email.trim())) {
+      setCertMsg('Email inválido.');
       return;
     }
     setSending(true);
     setCertMsg('');
     try {
+      const body = channel === 'whatsapp'
+        ? { name: name.trim(), phone: phone.trim() }
+        : { name: name.trim(), email: email.trim() };
       const r = await fetch('/api/certificate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), phone: phone.trim() }),
+        body: JSON.stringify(body),
       });
       const d = await r.json();
       if (d.ok) {
         setSent(true);
-        setName(''); setPhone('');
-        send({ type: 'restart' });
+        // Avisa o totem para reconhecer o envio e mostrar o sucesso.
+        send({ type: 'cert-sent', channel, name: name.trim() });
       } else {
         setCertMsg(
           d.error === 'whatsapp-not-connected' ? 'WhatsApp do totem não conectado. Chame um organizador.'
-          : d.error === 'no-whatsapp' ? 'Esse número não tem WhatsApp.'
+          : d.error === 'no-whatsapp' ? 'Esse número não tem WhatsApp. Tente por email.'
           : d.error === 'invalid-phone' ? 'Número inválido. Confira o DDD.'
+          : d.error === 'invalid-email' ? 'Email inválido. Confira e tente de novo.'
           : 'Não foi possível enviar. Tente novamente.'
         );
       }
@@ -238,6 +271,26 @@ export default function ControlPage() {
               </AnimatePresence>
             </motion.div>
 
+            {/* Selos da jornada (espelhados do totem) */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+              className="mt-3 rounded-2xl p-3"
+              style={{ background: 'rgba(0,20,40,0.4)', border: '1px solid rgba(0,212,255,0.12)' }}
+            >
+              <div className="flex items-center justify-between mb-2 px-1">
+                <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: 'rgba(0,212,255,0.7)' }}>Selos</p>
+                <p className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #7d93a8)' }}>{badges.length}/{BADGES.length}</p>
+              </div>
+              <div className="flex items-center justify-between gap-1">
+                {BADGES.map((b) => (
+                  <div key={b.id} className="flex flex-col items-center gap-1" style={{ flex: 1 }}>
+                    <BadgeSeal id={b.id} color={b.color} earned={badges.includes(b.id)} size={42} />
+                    <span className="text-[9px] leading-tight text-center" style={{ color: badges.includes(b.id) ? b.color : 'var(--text-muted, #56697d)' }}>{b.short}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
             {/* Ação contextual */}
             <div className="mt-5 flex-1">
               <AnimatePresence mode="wait">
@@ -254,11 +307,27 @@ export default function ControlPage() {
                   {isPhase && (
                     <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
                       <p className="text-sm mb-3" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>
-                        Terminou esta etapa no totem? Toque para avançar:
+                        {displayReady
+                          ? 'Etapa concluída no totem. Toque para avançar:'
+                          : 'O totem ainda está apresentando esta etapa. Aguarde terminar...'}
                       </p>
-                      <BigButton onClick={() => send({ type: 'advance' })} glow>
-                        Continuar
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <BigButton onClick={() => send({ type: 'advance' })} disabled={!displayReady} glow={displayReady}>
+                        {displayReady ? (
+                          <>
+                            Continuar
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          </>
+                        ) : (
+                          <>
+                            <motion.span
+                              className="w-2.5 h-2.5 rounded-full"
+                              style={{ background: 'currentColor' }}
+                              animate={{ opacity: [0.3, 1, 0.3] }}
+                              transition={{ duration: 1.2, repeat: Infinity }}
+                            />
+                            Aguarde o totem
+                          </>
+                        )}
                       </BigButton>
                     </div>
                   )}
@@ -277,18 +346,31 @@ export default function ControlPage() {
                         >
                           <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#00dd66" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
                         </motion.div>
-                        <p className="text-lg font-bold" style={{ color: '#00dd66' }}>Certificado enviado!</p>
-                        <p className="text-sm mt-1" style={{ color: 'var(--text-muted, #7d93a8)' }}>Confira o WhatsApp. O totem já está pronto para o próximo.</p>
+                        <p className="text-lg font-bold" style={{ color: '#00dd66' }}>{channel === 'email' ? 'Email registrado!' : 'Certificado enviado!'}</p>
+                        <p className="text-sm mt-1" style={{ color: 'var(--text-muted, #7d93a8)' }}>
+                          {channel === 'email' ? 'Você receberá o certificado em breve.' : 'Confira o seu WhatsApp.'} O totem já está pronto para o próximo.
+                        </p>
                       </motion.div>
                     ) : (
                       <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
-                        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>Receba o certificado no seu WhatsApp:</p>
+                        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>Preencha para receber o seu certificado:</p>
                         <Field value={name} onChange={setName} placeholder="Nome completo" />
                         <div className="h-3" />
-                        <Field value={phone} onChange={setPhone} placeholder="WhatsApp com DDD" inputMode="tel" />
+
+                        {/* Escolha do canal */}
+                        <div className="flex gap-2 mb-3">
+                          <ChannelTab active={channel === 'whatsapp'} onClick={() => { setChannel('whatsapp'); setCertMsg(''); }} label="WhatsApp" />
+                          <ChannelTab active={channel === 'email'} onClick={() => { setChannel('email'); setCertMsg(''); }} label="Email" />
+                        </div>
+
+                        {channel === 'whatsapp' ? (
+                          <Field value={phone} onChange={setPhone} placeholder="WhatsApp com DDD" inputMode="tel" />
+                        ) : (
+                          <Field value={email} onChange={setEmail} placeholder="seu@email.com" inputMode="text" />
+                        )}
                         <div className="h-4" />
                         <BigButton onClick={sendCertificate} disabled={sending} glow>
-                          {sending ? 'Enviando...' : 'Enviar certificado'}
+                          {sending ? 'Enviando...' : channel === 'whatsapp' ? 'Enviar certificado' : 'Registrar email'}
                         </BigButton>
                         {certMsg && <p className="text-sm mt-3" style={{ color: '#ff9090' }}>{certMsg}</p>}
                       </div>
@@ -313,7 +395,28 @@ export default function ControlPage() {
           </>
         )}
       </div>
+
+      {/* Animação do selo conquistado (mesma do totem) */}
+      <AnimatePresence>
+        {celebration && <SealCelebration badge={celebration} />}
+      </AnimatePresence>
     </main>
+  );
+}
+
+function ChannelTab({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+      style={{
+        background: active ? 'linear-gradient(135deg, rgba(0,212,255,0.25), rgba(0,102,255,0.25))' : 'rgba(0,20,40,0.4)',
+        border: `1px solid ${active ? 'rgba(0,212,255,0.6)' : 'rgba(0,212,255,0.15)'}`,
+        color: active ? '#fff' : 'var(--text-secondary, #9fb6cc)',
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

@@ -36,6 +36,11 @@ export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScre
     if (checked.size >= 5) grantBadge('checklist');
   }, [checked, grantBadge]);
 
+  // Avisa o controle remoto: só libera "Continuar" quando a narração termina.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('detetive:phase-ready', { detail: { ready: narrationStage === 'done' } }));
+  }, [narrationStage]);
+
   const speakAndWait = (id: string, text: string, runId: number) =>
     new Promise<void>((resolve) => {
       if (!playingRef.current || runId !== runIdRef.current) {

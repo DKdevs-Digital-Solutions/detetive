@@ -76,6 +76,11 @@ export default function NewsAnalyzerScreen({ onNavigate, onAdvance }: NewsAnalyz
     setDone(true);
   };
 
+  // Avisa o controle remoto: só libera "Continuar" quando a lição termina.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('detetive:phase-ready', { detail: { ready: done } }));
+  }, [done]);
+
   useEffect(() => {
     startTimerRef.current = setTimeout(() => { void startNarration(); }, 700);
     return () => {

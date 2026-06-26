@@ -5,7 +5,6 @@ import Avatar from '@/components/ui/Avatar';
 import { JOURNEY, PHASE_LABELS } from '@/lib/game';
 
 interface HomeScreenProps {
-  onStart: () => void;
   isOnline: boolean;
   /** URL do controle desta sessão; quando presente, mostra o QR para o celular. */
   controlUrl?: string;
@@ -13,10 +12,10 @@ interface HomeScreenProps {
 
 /**
  * Tela inicial da jornada (retrato/totem).
- * A saudação é falada automaticamente uma vez por sessão (disparada ao dispensar
- * o descanso de tela). Aqui não há texto de boas-vindas — só o convite a começar.
+ * A jornada começa SOMENTE pelo celular do visitante (QR) — não há botão de
+ * "começar" no totem. A saudação é falada automaticamente uma vez por sessão.
  */
-export default function HomeScreen({ onStart, isOnline, controlUrl }: HomeScreenProps) {
+export default function HomeScreen({ isOnline, controlUrl }: HomeScreenProps) {
   return (
     <div className="w-full h-full overflow-y-auto flex flex-col items-center justify-center gap-6 px-6 py-8 text-center">
       <motion.div
@@ -67,45 +66,29 @@ export default function HomeScreen({ onStart, isOnline, controlUrl }: HomeScreen
         ))}
       </motion.div>
 
-      {/* Começar */}
-      <motion.button
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.55 }}
-        whileTap={{ scale: 0.97 }}
-        onClick={onStart}
-        className="btn btn-primary text-lg sm:text-xl"
-        style={{ padding: '16px 40px' }}
-      >
-        Começar a investigação
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-          <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </motion.button>
-
-      {/* QR: controle pelo próprio celular (pareia com esta sessão) */}
+      {/* QR: a jornada começa pelo celular do visitante (pareia com esta sessão) */}
       {controlUrl && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.65 }}
-          className="flex items-center gap-4 px-4 py-3 rounded-2xl"
+          transition={{ delay: 0.55 }}
+          className="flex items-center gap-4 px-5 py-4 rounded-2xl"
           style={{ background: 'rgba(0,30,60,0.5)', border: '1px solid rgba(0,212,255,0.22)' }}
         >
           <div className="rounded-xl overflow-hidden shrink-0" style={{ background: '#fff', padding: 6 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`/api/control/qr?data=${encodeURIComponent(controlUrl)}`}
-              alt="QR para controlar pelo celular"
-              width={104}
-              height={104}
-              style={{ display: 'block', width: 104, height: 104 }}
+              alt="QR para começar pelo celular"
+              width={128}
+              height={128}
+              style={{ display: 'block', width: 128, height: 128 }}
             />
           </div>
-          <div className="text-left max-w-[210px]">
-            <p className="text-sm font-bold" style={{ color: '#00d4ff' }}>Use o seu celular</p>
-            <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--text-secondary)' }}>
-              Aponte a câmera para o QR e conduza a investigação pelo seu telefone.
+          <div className="text-left max-w-[240px]">
+            <p className="text-base font-bold" style={{ color: '#00d4ff' }}>Comece pelo seu celular</p>
+            <p className="text-sm mt-1 leading-snug" style={{ color: 'var(--text-secondary)' }}>
+              Aponte a câmera para o QR Code e conduza toda a investigação pelo seu telefone.
             </p>
           </div>
         </motion.div>

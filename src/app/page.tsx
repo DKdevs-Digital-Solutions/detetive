@@ -18,7 +18,7 @@ import SettingsMenu from '@/components/ui/SettingsMenu';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import { GameProvider, useGame } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
-import { JOURNEY } from '@/lib/game';
+import { JOURNEY, BADGE_IDS } from '@/lib/game';
 import { PRAISE } from '@/data/narration';
 
 // Código curto e único por sessão. Vira o "endereço" do controle remoto e expira
@@ -37,7 +37,7 @@ export default function App() {
 
 function AppShell() {
   const { idleSeconds, sound } = useSettings();
-  const { grantBadge, resetJourney } = useGame();
+  const { grantBadge, resetJourney, badges } = useGame();
   const { playClip, stop: stopSpeak } = useElevenLabsSpeech();
 
   const [screen, setScreen] = useState<Screen>('home');
@@ -51,6 +51,18 @@ function AppShell() {
   const screenRef = useRef<Screen>('home');
   useEffect(() => { screenRef.current = screen; }, [screen]);
 
+  // Prontidão da fase: cada tela da jornada avisa quando terminou seus processos
+  // (narração/quiz/etc.) e pode avançar. Trava o "Continuar" do controle até lá.
+  const [phaseReady, setPhaseReady] = useState(false);
+  const phaseReadyRef = useRef(false);
+  useEffect(() => { phaseReadyRef.current = phaseReady; }, [phaseReady]);
+  useEffect(() => { setPhaseReady(false); }, [screen]); // toda troca de tela começa "não pronta"
+  useEffect(() => {
+    const onReady = (e: Event) => setPhaseReady(!!(e as CustomEvent<{ ready?: boolean }>).detail?.ready);
+    window.addEventListener('detetive:phase-ready', onReady);
+    return () => window.removeEventListener('detetive:phase-ready', onReady);
+  }, []);
+
   // Sessão do controle remoto (código por sessão, lido pelo QR na Home).
   const [sessionCode, setSessionCode] = useState('');
   const sessionCodeRef = useRef('');
@@ -60,6 +72,10 @@ function AppShell() {
   const [origin, setOrigin] = useState('');
   useEffect(() => { setOrigin(window.location.origin); }, []);
   const controlUrl = origin && sessionCode ? `${origin}/controle?code=${sessionCode}` : '';
+
+  // Selos coletados (espelhados no controle). Ref para o handshake 'hello'.
+  const collectedRef = useRef<BadgeId[]>([]);
+  useEffect(() => { collectedRef.current = BADGE_IDS.filter((id) => badges[id]); }, [badges]);
 
   // Estado global de fala: qualquer tela pode bloquear o reconhecimento de ordens
   // enquanto o Detetive estiver lendo ou respondendo.
@@ -98,9 +114,19 @@ function AppShell() {
   const advanceFrom = useCallback((from: Screen) => {
     const i = JOURNEY.indexOf(from);
     const next: Screen = i === -1 || i === JOURNEY.length - 1 ? 'certificate' : JOURNEY[i + 1];
+    setPhaseReady(false); // trava o "Continuar" do controle durante a transição
     grantBadge(from as BadgeId);
     stopSpeak();
     setCelebration(from as BadgeId);
+    // Espelha a conquista do selo no controle (mesma animação).
+    const code = sessionCodeRef.current;
+    if (code) {
+      fetch('/api/control/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, command: { from: 'display', type: 'badge', badge: from } }),
+      }).catch(() => {});
+    }
     if (sound) {
       const i = Math.floor(Math.random() * PRAISE.length);
       playClip(`praise-${i}`, PRAISE[i]);
@@ -172,22 +198,26 @@ function AppShell() {
 
   // ─── Controle remoto (celular do visitante, código por sessão lido via QR) ────
   // O controlador (/controle?code=...) acompanha a jornada e envia ações sequenciais.
-  const handleControl = useCallback((cmd: { type?: string; screen?: Screen }) => {
+  const handleControl = useCallback((cmd: { type?: string; screen?: Screen; channel?: string; name?: string }) => {
     window.dispatchEvent(new Event('detetive:keepalive'));
     if (cmd.type === 'start') {
       startJourney();
     } else if (cmd.type === 'advance') {
       const s = screenRef.current;
-      if (JOURNEY.includes(s)) advanceFrom(s); // avança a fase sequencial atual
+      // Só avança se a fase atual já terminou seus processos (defesa no display).
+      if (JOURNEY.includes(s) && phaseReadyRef.current) advanceFrom(s);
     } else if (cmd.type === 'restart') {
       restartSession();
     } else if (cmd.type === 'navigate' && cmd.screen) {
       navigate(cmd.screen);
+    } else if (cmd.type === 'cert-sent') {
+      // O celular enviou o certificado: o totem reconhece e mostra o sucesso.
+      window.dispatchEvent(new CustomEvent('detetive:cert-sent', { detail: { channel: cmd.channel, name: cmd.name } }));
     } else if (cmd.type === 'hello') {
       fetch('/api/control/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: sessionCodeRef.current, command: { from: 'display', type: 'state', screen: screenRef.current } }),
+        body: JSON.stringify({ code: sessionCodeRef.current, command: { from: 'display', type: 'state', screen: screenRef.current, ready: phaseReadyRef.current, badges: collectedRef.current } }),
       }).catch(() => {});
     }
   }, [startJourney, advanceFrom, restartSession, navigate]);
@@ -211,21 +241,21 @@ function AppShell() {
     return () => es.close();
   }, [sessionCode]);
 
-  // Transmite a fase atual para o controlador acompanhar a jornada.
+  // Transmite a fase, a prontidão e os selos coletados para o controle acompanhar.
   useEffect(() => {
     if (!sessionCode) return;
     fetch('/api/control/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: sessionCode, command: { from: 'display', type: 'state', screen } }),
+      body: JSON.stringify({ code: sessionCode, command: { from: 'display', type: 'state', screen, ready: phaseReady, badges: BADGE_IDS.filter((id) => badges[id]) } }),
     }).catch(() => {});
-  }, [screen, sessionCode]);
+  }, [screen, sessionCode, phaseReady, badges]);
 
   const renderScreen = () => {
     switch (screen) {
       case 'home':
         return (
-          <HomeScreen onStart={startJourney} isOnline={isOnline} controlUrl={controlUrl} />
+          <HomeScreen isOnline={isOnline} controlUrl={controlUrl} />
         );
       case 'assistant':
         return <ConversationScreen onAdvance={() => advanceFrom('assistant')} isOnline={isOnline} />;
@@ -243,7 +273,7 @@ function AppShell() {
         return <AdminScreen onNavigate={navigate} />;
       default:
         return (
-          <HomeScreen onStart={startJourney} isOnline={isOnline} controlUrl={controlUrl} />
+          <HomeScreen isOnline={isOnline} controlUrl={controlUrl} />
         );
     }
   };

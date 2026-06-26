@@ -73,6 +73,11 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
   // Para a fala ao sair da fase.
   useEffect(() => () => { stopSpeaking(); }, [stopSpeaking]);
 
+  // Avisa o controle remoto: só libera "Continuar" ao chegar no resultado do quiz.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('detetive:phase-ready', { detail: { ready: state === 'result' } }));
+  }, [state]);
+
   const handleSelect = (idx: number) => {
     if (selected !== null || !canAnswer) return;
     setSelected(idx);
