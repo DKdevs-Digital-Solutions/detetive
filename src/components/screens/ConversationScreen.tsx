@@ -235,32 +235,33 @@ export default function ConversationScreen({ onAdvance, isOnline }: Props) {
       )}
 
       {!isSupported && (
-        <p className="text-xs text-center max-w-md" style={{ color: '#ffaa00' }}>
-          Este navegador não reconhece voz. Toque em &quot;Ir para o certificado&quot; para continuar.
+        <p className="text-xs sm:text-sm text-center max-w-md" style={{ color: '#ffaa00' }}>
+          Este navegador não reconhece voz. Use o seu celular para continuar.
         </p>
       )}
       {!isOnline && (
-        <p className="text-xs text-center" style={{ color: '#ffaa00' }}>
+        <p className="text-xs sm:text-sm text-center" style={{ color: '#ffaa00' }}>
           Sem internet — as respostas podem ficar limitadas.
         </p>
       )}
 
       {/* Ações */}
-      <div className="mt-auto flex flex-col sm:flex-row items-center gap-3 pt-2 shrink-0">
+      <div className="mt-auto flex flex-col items-center gap-3 pt-2 shrink-0">
         {isSupported && phase !== 'thinking' && phase !== 'answering' && phase !== 'done' && (
-          <button onClick={beginListening} className="btn btn-ghost text-sm" style={{ padding: '12px 22px' }}>
+          <button onClick={beginListening} className="btn btn-ghost text-sm sm:text-base" style={{ padding: '12px 22px' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z" />
             </svg>
             Falar {questionCount > 0 ? 'outra pergunta' : 'agora'}
           </button>
         )}
-        <button onClick={() => finish(CLOSING)} className="btn btn-primary text-sm" style={{ padding: '12px 26px' }}>
-          {questionCount > 0 ? 'Ir para o certificado' : 'Pular para o certificado'}
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <div className="flex items-center gap-2 text-sm sm:text-base font-semibold" style={{ color: '#00d4ff' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" />
+            <path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-        </button>
+          Continue pelo seu celular
+        </div>
       </div>
     </div>
   );

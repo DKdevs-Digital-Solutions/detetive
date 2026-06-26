@@ -18,7 +18,7 @@ import SettingsMenu from '@/components/ui/SettingsMenu';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import { GameProvider, useGame } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
-import { JOURNEY, BADGE_IDS } from '@/lib/game';
+import { JOURNEY } from '@/lib/game';
 import { PRAISE } from '@/data/narration';
 
 // Código curto e único por sessão. Vira o "endereço" do controle remoto e expira
@@ -37,7 +37,7 @@ export default function App() {
 
 function AppShell() {
   const { idleSeconds, sound } = useSettings();
-  const { grantBadge, resetJourney, badges } = useGame();
+  const { grantBadge, resetJourney } = useGame();
   const { playClip, stop: stopSpeak } = useElevenLabsSpeech();
 
   const [screen, setScreen] = useState<Screen>('home');
@@ -73,9 +73,14 @@ function AppShell() {
   useEffect(() => { setOrigin(window.location.origin); }, []);
   const controlUrl = origin && sessionCode ? `${origin}/controle?code=${sessionCode}` : '';
 
-  // Selos coletados (espelhados no controle). Ref para o handshake 'hello'.
-  const collectedRef = useRef<BadgeId[]>([]);
-  useEffect(() => { collectedRef.current = BADGE_IDS.filter((id) => badges[id]); }, [badges]);
+  // Selos CONCLUÍDOS (no FIM de cada fase, via advanceFrom) — espelhados no controle.
+  const [completedBadges, setCompletedBadges] = useState<BadgeId[]>([]);
+  const completedRef = useRef<BadgeId[]>([]);
+  useEffect(() => { completedRef.current = completedBadges; }, [completedBadges]);
+
+  // Controle conectado? Ao parear um celular, escondemos o QR do totem (evita
+  // outro acesso); o QR reaparece só em nova sessão.
+  const [controllerConnected, setControllerConnected] = useState(false);
 
   // Estado global de fala: qualquer tela pode bloquear o reconhecimento de ordens
   // enquanto o Detetive estiver lendo ou respondendo.
@@ -116,6 +121,7 @@ function AppShell() {
     const next: Screen = i === -1 || i === JOURNEY.length - 1 ? 'certificate' : JOURNEY[i + 1];
     setPhaseReady(false); // trava o "Continuar" do controle durante a transição
     grantBadge(from as BadgeId);
+    setCompletedBadges((prev) => (prev.includes(from as BadgeId) ? prev : [...prev, from as BadgeId]));
     stopSpeak();
     setCelebration(from as BadgeId);
     // Espelha a conquista do selo no controle (mesma animação).
@@ -146,6 +152,8 @@ function AppShell() {
     resetJourney();
     setScreen('home');
     setSessionCode(genCode()); // nova sessão → novo QR; o controle anterior expira
+    setCompletedBadges([]);
+    setControllerConnected(false); // nova sessão → QR reaparece no totem
   }, [resetJourney, stopSpeak]);
 
   // Timer de inatividade (configurável; 0 = desligado)
@@ -220,10 +228,11 @@ function AppShell() {
       // Quiz respondido pelo celular: encaminha a ação para a tela do quiz.
       window.dispatchEvent(new CustomEvent('detetive:quiz', { detail: { action: cmd.type.slice(5), idx: cmd.idx } }));
     } else if (cmd.type === 'hello') {
+      setControllerConnected(true); // celular pareou → some o QR do totem
       fetch('/api/control/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: sessionCodeRef.current, command: { from: 'display', type: 'state', screen: screenRef.current, ready: phaseReadyRef.current, badges: collectedRef.current } }),
+        body: JSON.stringify({ code: sessionCodeRef.current, command: { from: 'display', type: 'state', screen: screenRef.current, ready: phaseReadyRef.current, badges: completedRef.current } }),
       }).catch(() => {});
     }
   }, [startJourney, advanceFrom, restartSession, navigate]);
@@ -253,15 +262,15 @@ function AppShell() {
     fetch('/api/control/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: sessionCode, command: { from: 'display', type: 'state', screen, ready: phaseReady, badges: BADGE_IDS.filter((id) => badges[id]) } }),
+      body: JSON.stringify({ code: sessionCode, command: { from: 'display', type: 'state', screen, ready: phaseReady, badges: completedBadges } }),
     }).catch(() => {});
-  }, [screen, sessionCode, phaseReady, badges]);
+  }, [screen, sessionCode, phaseReady, completedBadges]);
 
   const renderScreen = () => {
     switch (screen) {
       case 'home':
         return (
-          <HomeScreen isOnline={isOnline} controlUrl={controlUrl} />
+          <HomeScreen isOnline={isOnline} controlUrl={controlUrl} controllerConnected={controllerConnected} />
         );
       case 'assistant':
         return <ConversationScreen onAdvance={() => advanceFrom('assistant')} isOnline={isOnline} />;
@@ -279,7 +288,7 @@ function AppShell() {
         return <AdminScreen onNavigate={navigate} />;
       default:
         return (
-          <HomeScreen isOnline={isOnline} controlUrl={controlUrl} />
+          <HomeScreen isOnline={isOnline} controlUrl={controlUrl} controllerConnected={controllerConnected} />
         );
     }
   };

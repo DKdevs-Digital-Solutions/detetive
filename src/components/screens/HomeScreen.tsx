@@ -8,6 +8,8 @@ interface HomeScreenProps {
   isOnline: boolean;
   /** URL do controle desta sessão; quando presente, mostra o QR para o celular. */
   controlUrl?: string;
+  /** Quando um celular já pareou: esconde o QR (evita outro acesso). */
+  controllerConnected?: boolean;
 }
 
 // Partículas de dados flutuantes (posições fixas — evita mismatch de hidratação).
@@ -32,7 +34,7 @@ const PARTICLES = [
  * "começar" no totem. A saudação é falada automaticamente uma vez por sessão.
  * Efeitos de fundo animados (tema IA) — o PC do totem aguenta.
  */
-export default function HomeScreen({ isOnline, controlUrl }: HomeScreenProps) {
+export default function HomeScreen({ isOnline, controlUrl, controllerConnected }: HomeScreenProps) {
   return (
     <div className="relative w-full h-full overflow-hidden flex flex-col items-center justify-center gap-6 px-6 py-8 text-center">
       {/* ─── Efeitos de fundo ─── */}
@@ -153,13 +155,36 @@ export default function HomeScreen({ isOnline, controlUrl }: HomeScreenProps) {
         ))}
       </motion.div>
 
+      {/* Celular já pareado: esconde o QR e confirma a conexão */}
+      {controllerConnected && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="relative z-10 flex items-center gap-3 px-6 py-4 rounded-2xl"
+          style={{ background: 'rgba(0,221,102,0.1)', border: '1px solid rgba(0,221,102,0.45)', boxShadow: '0 0 30px rgba(0,221,102,0.15)' }}
+        >
+          <motion.span
+            className="w-3 h-3 rounded-full"
+            style={{ background: '#00dd66', boxShadow: '0 0 10px #00dd66' }}
+            animate={{ opacity: [0.4, 1, 0.4] }}
+            transition={{ duration: 1.4, repeat: Infinity }}
+          />
+          <div className="text-left">
+            <p className="text-base sm:text-lg lg:text-xl font-bold" style={{ color: '#00dd66' }}>Celular conectado!</p>
+            <p className="text-sm sm:text-base mt-0.5 leading-snug" style={{ color: 'var(--text-secondary)' }}>
+              Comece a investigação pelo seu telefone.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
       {/* QR: a jornada começa pelo celular do visitante (pareia com esta sessão) */}
-      {controlUrl && (
+      {!controllerConnected && controlUrl && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.55 }}
-          className="relative z-10 flex items-center gap-4 px-5 py-4 rounded-2xl"
+          className="relative z-10 flex items-center gap-4 px-5 py-4 lg:px-7 lg:py-6 rounded-2xl"
           style={{ background: 'rgba(0,30,60,0.5)', border: '1px solid rgba(0,212,255,0.22)', boxShadow: '0 0 30px rgba(0,212,255,0.12)' }}
         >
           <div className="rounded-xl overflow-hidden shrink-0" style={{ background: '#fff', padding: 6 }}>
@@ -167,14 +192,12 @@ export default function HomeScreen({ isOnline, controlUrl }: HomeScreenProps) {
             <img
               src={`/api/control/qr?data=${encodeURIComponent(controlUrl)}`}
               alt="QR para começar pelo celular"
-              width={128}
-              height={128}
-              style={{ display: 'block', width: 128, height: 128 }}
+              className="block w-[128px] h-[128px] lg:w-[176px] lg:h-[176px]"
             />
           </div>
-          <div className="text-left max-w-[240px]">
-            <p className="text-base font-bold" style={{ color: '#00d4ff' }}>Comece pelo seu celular</p>
-            <p className="text-sm mt-1 leading-snug" style={{ color: 'var(--text-secondary)' }}>
+          <div className="text-left max-w-[240px] lg:max-w-[320px]">
+            <p className="text-base lg:text-2xl font-bold" style={{ color: '#00d4ff' }}>Comece pelo seu celular</p>
+            <p className="text-sm lg:text-lg mt-1 leading-snug" style={{ color: 'var(--text-secondary)' }}>
               Aponte a câmera para o QR Code e conduza toda a investigação pelo seu telefone.
             </p>
           </div>

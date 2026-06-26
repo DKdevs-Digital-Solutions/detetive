@@ -481,45 +481,44 @@ function QuizControl({ quiz, send, displayReady }: { quiz: QuizInfo | null; send
     );
   }
 
-  // state === 'question'
+  // state === 'question' — no celular mostramos SÓ as letras (a pergunta está no totem)
   const answered = quiz.selected !== null;
+  const cols = Math.min(quiz.options.length || 3, 3);
   return (
     <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: 'rgba(0,212,255,0.7)' }}>
-          Pergunta {quiz.index + 1} de {quiz.total}
-        </p>
-      </div>
-      <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary, #e8f4ff)' }}>{quiz.question}</p>
+      <p className="text-[11px] uppercase tracking-[0.18em] mb-1" style={{ color: 'rgba(0,212,255,0.7)' }}>
+        Pergunta {quiz.index + 1} de {quiz.total}
+      </p>
+      <p className="text-sm mb-4 font-semibold" style={{ color: answered ? (quiz.selected === quiz.correct ? '#00dd44' : '#ffaa00') : '#00d4ff' }}>
+        {answered
+          ? (quiz.selected === quiz.correct ? 'Correto! 🎉' : 'Quase! Veja no totem.')
+          : (quiz.canAnswer ? 'Toque na sua resposta (a pergunta está no totem):' : 'Ouça o Detetive ler a pergunta no totem...')}
+      </p>
 
-      {!quiz.canAnswer && !answered && (
-        <p className="text-sm mb-3" style={{ color: '#00d4ff' }}>Ouça o Detetive ler a pergunta no totem...</p>
-      )}
-
-      <div className="flex flex-col gap-2">
-        {quiz.options.map((opt, idx) => {
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
+        {quiz.options.map((_, idx) => {
           const isCorrect = answered && idx === quiz.correct;
           const isWrongPick = answered && idx === quiz.selected && idx !== quiz.correct;
           const disabled = !quiz.canAnswer || answered;
-          let border = 'rgba(0,212,255,0.25)';
-          let bg = 'rgba(0,20,40,0.5)';
-          let color = 'var(--text-primary, #e8f4ff)';
-          if (isCorrect) { border = '#00dd44'; bg = 'rgba(0,221,68,0.14)'; color = '#00dd44'; }
-          else if (isWrongPick) { border = '#ff3344'; bg = 'rgba(255,51,68,0.14)'; color = '#ff3344'; }
+          let border = 'rgba(0,212,255,0.3)';
+          let bg = 'rgba(0,30,60,0.6)';
+          let color = '#00d4ff';
+          if (isCorrect) { border = '#00dd44'; bg = 'rgba(0,221,68,0.18)'; color = '#fff'; }
+          else if (isWrongPick) { border = '#ff3344'; bg = 'rgba(255,51,68,0.18)'; color = '#fff'; }
           return (
             <button
               key={idx}
               onClick={disabled ? undefined : () => send({ type: 'quiz-select', idx })}
-              className="w-full p-3 rounded-xl text-left flex items-center gap-3"
-              style={{ background: bg, border: `1px solid ${border}`, color, opacity: disabled && !isCorrect && !isWrongPick ? 0.6 : 1 }}
+              className="aspect-square rounded-2xl flex items-center justify-center font-black"
+              style={{
+                fontSize: 'clamp(28px, 12vw, 52px)',
+                background: bg,
+                border: `2px solid ${border}`,
+                color,
+                opacity: disabled && !isCorrect && !isWrongPick ? 0.5 : 1,
+              }}
             >
-              <span
-                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
-                style={{ background: isCorrect ? '#00dd44' : isWrongPick ? '#ff3344' : 'rgba(0,212,255,0.15)', color: isCorrect || isWrongPick ? '#fff' : '#00d4ff' }}
-              >
-                {isCorrect ? '✓' : isWrongPick ? '✗' : String.fromCharCode(65 + idx)}
-              </span>
-              <span className="text-sm font-medium">{opt}</span>
+              {isCorrect ? '✓' : isWrongPick ? '✗' : String.fromCharCode(65 + idx)}
             </button>
           );
         })}
@@ -527,19 +526,7 @@ function QuizControl({ quiz, send, displayReady }: { quiz: QuizInfo | null; send
 
       {answered && (
         <>
-          <div
-            className="mt-3 p-3 rounded-xl"
-            style={{
-              background: quiz.selected === quiz.correct ? 'rgba(0,221,68,0.1)' : 'rgba(255,170,0,0.1)',
-              border: `1px solid ${quiz.selected === quiz.correct ? 'rgba(0,221,68,0.3)' : 'rgba(255,170,0,0.3)'}`,
-            }}
-          >
-            <p className="text-sm font-bold mb-1" style={{ color: quiz.selected === quiz.correct ? '#00dd44' : '#ffaa00' }}>
-              {quiz.selected === quiz.correct ? 'Correto!' : 'Incorreto!'}
-            </p>
-            {quiz.explanation && <p className="text-sm" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>{quiz.explanation}</p>}
-          </div>
-          <div className="h-3" />
+          <div className="h-4" />
           <BigButton onClick={() => send({ type: 'quiz-next' })} glow>
             {quiz.index < quiz.total - 1 ? 'Próxima pergunta' : 'Ver resultado'}
           </BigButton>

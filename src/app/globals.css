@@ -37,6 +37,15 @@ body {
   user-select: none;
 }
 
+/* Escala proporcional para telas grandes (o totem é uma TV de 43").
+   Como quase tudo usa unidades rem (Tailwind), mexer no font-size do root
+   redimensiona texto E espaçamentos de forma harmônica. Em telas pequenas
+   (o celular do controle) fica ~16px; numa TV 1080p+ cresce até ~26px.
+   Funciona em qualquer orientação (usa vw + vh). */
+html {
+  font-size: clamp(16px, 0.75vw + 0.75vh, 26px);
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
