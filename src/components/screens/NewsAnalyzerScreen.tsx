@@ -11,13 +11,12 @@ import { NEWS_LESSONS, NEWS_INTRO, NEWS_CLOSING } from '@/data/news';
 
 interface NewsAnalyzerScreenProps {
   onNavigate: (screen: Screen) => void;
-  onAdvance: () => void;
   isOnline?: boolean;
 }
 
 const LEVEL_COLOR: Record<ConfidenceLevel, string> = { green: '#00dd44', yellow: '#ffaa00', red: '#ff3344' };
 
-export default function NewsAnalyzerScreen({ onNavigate, onAdvance }: NewsAnalyzerScreenProps) {
+export default function NewsAnalyzerScreen({ onNavigate }: NewsAnalyzerScreenProps) {
   const { grantBadge } = useGame();
   const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
@@ -177,18 +176,13 @@ export default function NewsAnalyzerScreen({ onNavigate, onAdvance }: NewsAnalyz
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           {done ? 'Pronto para a próxima fase!' : 'O Detetive está explicando...'}
         </p>
-        <motion.button
-          onClick={onAdvance}
-          animate={done ? { scale: [1, 1.04, 1] } : {}}
-          transition={{ duration: 1.6, repeat: Infinity }}
-          className="btn btn-primary text-sm"
-          style={{ padding: '12px 26px', opacity: done ? 1 : 0.85 }}
-        >
-          Continuar
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: '#00d4ff' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" />
+            <path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-        </motion.button>
+          Continue no seu celular
+        </div>
       </div>
     </div>
   );

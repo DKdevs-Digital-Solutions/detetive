@@ -16,53 +16,133 @@ type PhotoState = 'idle' | 'live' | 'captured' | 'attached' | 'error';
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-// Compõe a polaroid temática a partir do quadro atual do vídeo (espelhado).
+// Caminho de retângulo arredondado (compatível com qualquer canvas).
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Compõe a polaroid temática (estilo IA / HUD) a partir do quadro do vídeo (espelhado).
 function composePolaroid(video: HTMLVideoElement): string {
   const W = 900;
-  const pad = 40;
-  const photo = W - pad * 2; // foto quadrada
-  const H = pad + photo + 200; // moldura + legenda
+  const sidePad = 64;
+  const topPad = 116;            // espaço para o cabeçalho
+  const photo = W - sidePad * 2; // foto quadrada
+  const bottom = 224;            // área da legenda
+  const H = topPad + photo + bottom;
+  const px = sidePad;
+  const py = topPad;
+
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas.toDataURL('image/jpeg', 0.85);
 
-  // Moldura branca (papel)
-  ctx.fillStyle = '#fdfdf7';
+  // Fundo tech (gradiente escuro)
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#07182b');
+  bg.addColorStop(1, '#040d18');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Foto (recorte quadrado central do vídeo, espelhado)
+  // Grade de circuito sutil
+  ctx.strokeStyle = 'rgba(0,212,255,0.06)';
+  ctx.lineWidth = 1;
+  for (let gx = 0; gx <= W; gx += 45) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+  for (let gy = 0; gy <= H; gy += 45) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+
+  // Borda neon externa
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,212,255,0.5)';
+  ctx.shadowBlur = 26;
+  ctx.strokeStyle = '#00d4ff';
+  ctx.lineWidth = 4;
+  roundRectPath(ctx, 18, 18, W - 36, H - 36, 30);
+  ctx.stroke();
+  ctx.restore();
+
+  // Cabeçalho
+  ctx.textAlign = 'center';
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,212,255,0.6)';
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = '#00d4ff';
+  ctx.font = '800 58px Georgia, "Times New Roman", serif';
+  ctx.fillText('DETETIVE IA', W / 2, 76);
+  ctx.restore();
+  ctx.fillStyle = 'rgba(175,214,236,0.85)';
+  ctx.font = '400 22px Arial, sans-serif';
+  ctx.fillText('Feira de Ciências e Tecnologias', W / 2, 102);
+
+  // Foto (clip arredondado, recorte quadrado, espelhada)
   const vw = video.videoWidth || 1280;
   const vh = video.videoHeight || 720;
   const side = Math.min(vw, vh);
   const sx = (vw - side) / 2;
   const sy = (vh - side) / 2;
   ctx.save();
-  ctx.translate(pad + photo, pad);
+  roundRectPath(ctx, px, py, photo, photo, 18);
+  ctx.clip();
+  ctx.translate(px + photo, py);
   ctx.scale(-1, 1);
   ctx.drawImage(video, sx, sy, side, side, 0, 0, photo, photo);
   ctx.restore();
 
-  // Contorno sutil no tema
-  ctx.strokeStyle = 'rgba(0,40,80,0.18)';
+  // Moldura da foto com brilho
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,212,255,0.4)';
+  ctx.shadowBlur = 14;
+  ctx.strokeStyle = 'rgba(0,212,255,0.8)';
+  ctx.lineWidth = 3;
+  roundRectPath(ctx, px, py, photo, photo, 18);
+  ctx.stroke();
+  ctx.restore();
+
+  // Cantos HUD
+  const c = 36;
+  ctx.strokeStyle = '#00ffd0';
+  ctx.lineWidth = 4;
+  ([[px, py, 1, 1], [px + photo, py, -1, 1], [px, py + photo, 1, -1], [px + photo, py + photo, -1, -1]] as const)
+    .forEach(([cx, cy, dx, dy]) => {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + dy * c);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx + dx * c, cy);
+      ctx.stroke();
+    });
+
+  // Legenda inferior com linha de circuito
+  const baseY = py + photo + 62;
+  ctx.strokeStyle = 'rgba(0,212,255,0.4)';
   ctx.lineWidth = 2;
-  ctx.strokeRect(pad, pad, photo, photo);
+  ctx.beginPath();
+  ctx.moveTo(sidePad, baseY - 34);
+  ctx.lineTo(W - sidePad, baseY - 34);
+  ctx.stroke();
+  [sidePad, W / 2, W - sidePad].forEach((nx) => {
+    ctx.fillStyle = '#00d4ff';
+    ctx.beginPath();
+    ctx.arc(nx, baseY - 34, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
 
-  // Legenda
-  const capY = pad + photo + 56;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#0a2a44';
-  ctx.font = '700 60px Georgia, "Times New Roman", serif';
-  ctx.fillText('Detetive IA', W / 2, capY);
-  ctx.fillStyle = '#3a6b88';
-  ctx.font = '400 28px Arial, sans-serif';
-  ctx.fillText('Feira de Ciências e Tecnologias', W / 2, capY + 46);
-  ctx.fillStyle = '#8aa0b4';
+  ctx.fillStyle = '#eaf6ff';
+  ctx.font = '700 36px Georgia, "Times New Roman", serif';
+  ctx.fillText('Detetive da Informação', W / 2, baseY + 6);
+  ctx.fillStyle = 'rgba(150,180,205,0.92)';
   ctx.font = '400 24px Arial, sans-serif';
-  ctx.fillText(new Date().toLocaleDateString('pt-BR'), W / 2, capY + 86);
+  ctx.fillText('Colégio Monsenhor Raeder', W / 2, baseY + 44);
+  ctx.fillStyle = 'rgba(0,212,255,0.85)';
+  ctx.font = '400 22px Arial, sans-serif';
+  ctx.fillText(new Date().toLocaleDateString('pt-BR'), W / 2, baseY + 80);
 
-  return canvas.toDataURL('image/jpeg', 0.85);
+  return canvas.toDataURL('image/jpeg', 0.86);
 }
 
 export default function CertificateScreen({ onNavigate, onComplete, controlCode }: Props) {

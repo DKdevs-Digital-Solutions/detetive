@@ -198,7 +198,7 @@ function AppShell() {
 
   // ─── Controle remoto (celular do visitante, código por sessão lido via QR) ────
   // O controlador (/controle?code=...) acompanha a jornada e envia ações sequenciais.
-  const handleControl = useCallback((cmd: { type?: string; screen?: Screen; channel?: string; name?: string }) => {
+  const handleControl = useCallback((cmd: { type?: string; screen?: Screen; channel?: string; name?: string; idx?: number }) => {
     window.dispatchEvent(new Event('detetive:keepalive'));
     if (cmd.type === 'start') {
       startJourney();
@@ -216,6 +216,9 @@ function AppShell() {
     } else if (cmd.type && cmd.type.startsWith('photo-')) {
       // Cabine de fotos: o celular comanda; a webcam é a do totem.
       window.dispatchEvent(new CustomEvent('detetive:photo', { detail: { action: cmd.type } }));
+    } else if (cmd.type && cmd.type.startsWith('quiz-')) {
+      // Quiz respondido pelo celular: encaminha a ação para a tela do quiz.
+      window.dispatchEvent(new CustomEvent('detetive:quiz', { detail: { action: cmd.type.slice(5), idx: cmd.idx } }));
     } else if (cmd.type === 'hello') {
       fetch('/api/control/send', {
         method: 'POST',
@@ -263,13 +266,13 @@ function AppShell() {
       case 'assistant':
         return <ConversationScreen onAdvance={() => advanceFrom('assistant')} isOnline={isOnline} />;
       case 'news':
-        return <NewsAnalyzerScreen onNavigate={navigate} onAdvance={() => advanceFrom('news')} isOnline={isOnline} />;
+        return <NewsAnalyzerScreen onNavigate={navigate} isOnline={isOnline} />;
       case 'quiz':
-        return <QuizScreen onNavigate={navigate} onAdvance={() => advanceFrom('quiz')} />;
+        return <QuizScreen onNavigate={navigate} controlCode={sessionCode} />;
       case 'checklist':
-        return <ChecklistScreen onNavigate={navigate} onAdvance={() => advanceFrom('checklist')} />;
+        return <ChecklistScreen onNavigate={navigate} />;
       case 'ai-errors':
-        return <AIErrorsScreen onNavigate={navigate} onAdvance={() => advanceFrom('ai-errors')} />;
+        return <AIErrorsScreen onNavigate={navigate} />;
       case 'certificate':
         return <CertificateScreen onNavigate={navigate} onComplete={restartSession} controlCode={sessionCode} />;
       case 'admin':

@@ -22,6 +22,20 @@ function label(screen: string): string {
 
 type Status = 'loading' | 'nocode' | 'busy' | 'owned';
 
+interface QuizInfo {
+  state: 'intro' | 'question' | 'analyzing' | 'result';
+  index: number;
+  total: number;
+  question: string;
+  options: string[];
+  canAnswer: boolean;
+  selected: number | null;
+  correct: number;
+  explanation: string;
+  score: number;
+  pct: number;
+}
+
 export default function ControlPage() {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState<Status>('loading');
@@ -36,6 +50,9 @@ export default function ControlPage() {
   // Cabine de fotos: estado espelhado do totem + decisão de pular.
   const [photoState, setPhotoState] = useState<'idle' | 'live' | 'captured' | 'attached' | 'error'>('idle');
   const [photoSkipped, setPhotoSkipped] = useState(false);
+
+  // Quiz: espelho do estado do totem (o quiz é respondido aqui no celular).
+  const [quiz, setQuiz] = useState<QuizInfo | null>(null);
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -114,11 +131,14 @@ export default function ControlPage() {
             setSent(false); setCertMsg('');
             setPhotoState('idle'); setPhotoSkipped(false);
           }
+          if (cmd.screen !== 'quiz') setQuiz(null);
         } else if (cmd?.from === 'display' && cmd.type === 'badge' && cmd.badge) {
           setCelebration(cmd.badge);
           setBadges((prev) => (prev.includes(cmd.badge) ? prev : [...prev, cmd.badge]));
         } else if (cmd?.from === 'display' && cmd.type === 'photo-state' && cmd.photoState) {
           setPhotoState(cmd.photoState);
+        } else if (cmd?.from === 'display' && cmd.type === 'quiz-state' && cmd.quiz) {
+          setQuiz(cmd.quiz);
         }
       } catch { /* ignore */ }
     };
@@ -313,7 +333,11 @@ export default function ControlPage() {
                     </BigButton>
                   )}
 
-                  {isPhase && (
+                  {isPhase && displayScreen === 'quiz' && (
+                    <QuizControl quiz={quiz} send={send} displayReady={displayReady} />
+                  )}
+
+                  {isPhase && displayScreen !== 'quiz' && (
                     <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
                       <p className="text-sm mb-3" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>
                         {displayReady
@@ -403,15 +427,6 @@ export default function ControlPage() {
                 </motion.div>
               </AnimatePresence>
             </div>
-
-            {/* Reiniciar */}
-            <button
-              onClick={() => send({ type: 'restart' })}
-              className="mt-6 w-full py-3 rounded-xl text-sm font-medium"
-              style={{ border: '1px solid rgba(0,212,255,0.2)', color: 'rgba(155,200,230,0.9)', background: 'transparent' }}
-            >
-              Reiniciar sessão do totem
-            </button>
           </>
         )}
       </div>
@@ -421,6 +436,116 @@ export default function ControlPage() {
         {celebration && <SealCelebration badge={celebration} />}
       </AnimatePresence>
     </main>
+  );
+}
+
+function QuizControl({ quiz, send, displayReady }: { quiz: QuizInfo | null; send: (c: Record<string, unknown>) => void; displayReady: boolean }) {
+  // Sem estado ainda (acabou de entrar na fase) → oferece iniciar.
+  if (!quiz || quiz.state === 'intro') {
+    return (
+      <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+        <p className="text-base font-bold mb-1" style={{ color: '#00d4ff' }}>Quiz Detetive IA</p>
+        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>
+          10 perguntas. O Detetive lê cada uma no totem e você responde aqui.
+        </p>
+        <BigButton onClick={() => send({ type: 'quiz-start' })} glow>Iniciar Quiz</BigButton>
+      </div>
+    );
+  }
+
+  if (quiz.state === 'analyzing') {
+    return (
+      <div className="rounded-2xl p-6 text-center flex flex-col items-center gap-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+        <motion.div
+          className="rounded-full"
+          style={{ width: 48, height: 48, border: '4px solid rgba(0,212,255,0.2)', borderTopColor: '#00d4ff' }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        />
+        <p className="text-base font-bold" style={{ color: '#00d4ff' }}>Analisando suas respostas...</p>
+      </div>
+    );
+  }
+
+  if (quiz.state === 'result') {
+    return (
+      <div className="rounded-2xl p-4 text-center" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+        <p className="text-sm" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>Sua pontuação</p>
+        <p className="text-3xl font-black my-1" style={{ color: '#00d4ff' }}>{quiz.score}/{quiz.total}</p>
+        <p className="text-sm mb-4" style={{ color: 'var(--text-muted, #7d93a8)' }}>{quiz.pct}% de acertos</p>
+        <BigButton onClick={() => send({ type: 'advance' })} disabled={!displayReady} glow={displayReady}>
+          Continuar
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </BigButton>
+      </div>
+    );
+  }
+
+  // state === 'question'
+  const answered = quiz.selected !== null;
+  return (
+    <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: 'rgba(0,212,255,0.7)' }}>
+          Pergunta {quiz.index + 1} de {quiz.total}
+        </p>
+      </div>
+      <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary, #e8f4ff)' }}>{quiz.question}</p>
+
+      {!quiz.canAnswer && !answered && (
+        <p className="text-sm mb-3" style={{ color: '#00d4ff' }}>Ouça o Detetive ler a pergunta no totem...</p>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {quiz.options.map((opt, idx) => {
+          const isCorrect = answered && idx === quiz.correct;
+          const isWrongPick = answered && idx === quiz.selected && idx !== quiz.correct;
+          const disabled = !quiz.canAnswer || answered;
+          let border = 'rgba(0,212,255,0.25)';
+          let bg = 'rgba(0,20,40,0.5)';
+          let color = 'var(--text-primary, #e8f4ff)';
+          if (isCorrect) { border = '#00dd44'; bg = 'rgba(0,221,68,0.14)'; color = '#00dd44'; }
+          else if (isWrongPick) { border = '#ff3344'; bg = 'rgba(255,51,68,0.14)'; color = '#ff3344'; }
+          return (
+            <button
+              key={idx}
+              onClick={disabled ? undefined : () => send({ type: 'quiz-select', idx })}
+              className="w-full p-3 rounded-xl text-left flex items-center gap-3"
+              style={{ background: bg, border: `1px solid ${border}`, color, opacity: disabled && !isCorrect && !isWrongPick ? 0.6 : 1 }}
+            >
+              <span
+                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
+                style={{ background: isCorrect ? '#00dd44' : isWrongPick ? '#ff3344' : 'rgba(0,212,255,0.15)', color: isCorrect || isWrongPick ? '#fff' : '#00d4ff' }}
+              >
+                {isCorrect ? '✓' : isWrongPick ? '✗' : String.fromCharCode(65 + idx)}
+              </span>
+              <span className="text-sm font-medium">{opt}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {answered && (
+        <>
+          <div
+            className="mt-3 p-3 rounded-xl"
+            style={{
+              background: quiz.selected === quiz.correct ? 'rgba(0,221,68,0.1)' : 'rgba(255,170,0,0.1)',
+              border: `1px solid ${quiz.selected === quiz.correct ? 'rgba(0,221,68,0.3)' : 'rgba(255,170,0,0.3)'}`,
+            }}
+          >
+            <p className="text-sm font-bold mb-1" style={{ color: quiz.selected === quiz.correct ? '#00dd44' : '#ffaa00' }}>
+              {quiz.selected === quiz.correct ? 'Correto!' : 'Incorreto!'}
+            </p>
+            {quiz.explanation && <p className="text-sm" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>{quiz.explanation}</p>}
+          </div>
+          <div className="h-3" />
+          <BigButton onClick={() => send({ type: 'quiz-next' })} glow>
+            {quiz.index < quiz.total - 1 ? 'Próxima pergunta' : 'Ver resultado'}
+          </BigButton>
+        </>
+      )}
+    </div>
   );
 }
 

@@ -9,10 +9,10 @@ import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 
 interface QuizScreenProps {
   onNavigate: (screen: Screen) => void;
-  onAdvance: () => void;
+  controlCode: string; // sala da sessão — o quiz é respondido pelo celular
 }
 
-type QuizState = 'intro' | 'question' | 'result';
+type QuizState = 'intro' | 'question' | 'analyzing' | 'result';
 
 // Embaralhamento Fisher-Yates (cópia — não muta o original).
 function shuffle<T>(arr: T[]): T[] {
@@ -39,7 +39,7 @@ function buildDeck(): QuizQuestion[] {
   });
 }
 
-export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
+export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps) {
   const { grantBadge } = useGame();
   const { speak, stop: stopSpeaking } = useElevenLabsSpeech();
   const [deck, setDeck] = useState<QuizQuestion[]>(() => buildDeck());
@@ -95,14 +95,23 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
     if (currentQ < deck.length - 1) {
       setCurrentQ((q) => q + 1);
     } else {
+      setState('analyzing'); // mostra "analisando" antes de revelar o resultado
+    }
+  };
+
+  // "Analisando" → resultado (com o selo e o registro estatístico).
+  useEffect(() => {
+    if (state !== 'analyzing') return;
+    const t = setTimeout(() => {
       setState('result');
-      grantBadge('quiz'); // selo da jornada
+      grantBadge('quiz');
       fetch('/api/log', {
         method: 'POST',
         body: JSON.stringify({ type: 'quiz', score: Math.round((score / deck.length) * 100) }),
       }).catch(() => {});
-    }
-  };
+    }, 2200);
+    return () => clearTimeout(t);
+  }, [state, grantBadge, score, deck.length]);
 
   const handleRestart = () => {
     stopSpeaking();
@@ -125,6 +134,49 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
       : 'Continue estudando — o pensamento crítico é fundamental!';
 
   const resultColor = pct >= 80 ? '#00dd44' : pct >= 60 ? '#ffaa00' : '#ff3344';
+
+  // Espelha o estado do quiz para o celular (que é quem responde).
+  useEffect(() => {
+    if (!controlCode) return;
+    const q = deck[currentQ];
+    const payload = {
+      state,
+      index: currentQ,
+      total: deck.length,
+      question: q?.question ?? '',
+      options: q?.options ?? [],
+      canAnswer,
+      selected,
+      correct: selected !== null ? q?.correct ?? -1 : -1,
+      explanation: selected !== null ? q?.explanation ?? '' : '',
+      score,
+      pct,
+    };
+    fetch('/api/control/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: controlCode, command: { from: 'display', type: 'quiz-state', quiz: payload } }),
+    }).catch(() => {});
+  }, [controlCode, state, currentQ, canAnswer, selected, score, pct, deck]);
+
+  // Recebe as ações do celular (responder, próxima, jogar de novo).
+  const quizActionsRef = useRef<(a: string, idx?: number) => void>(() => {});
+  useEffect(() => {
+    quizActionsRef.current = (action: string, idx?: number) => {
+      if (action === 'start') setState('question');
+      else if (action === 'select' && typeof idx === 'number') handleSelect(idx);
+      else if (action === 'next') handleNext();
+      else if (action === 'restart') handleRestart();
+    };
+  });
+  useEffect(() => {
+    const onQuiz = (e: Event) => {
+      const d = (e as CustomEvent<{ action?: string; idx?: number }>).detail || {};
+      quizActionsRef.current(d.action || '', d.idx);
+    };
+    window.addEventListener('detetive:quiz', onQuiz);
+    return () => window.removeEventListener('detetive:quiz', onQuiz);
+  }, []);
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
@@ -188,14 +240,18 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
               ))}
             </div>
 
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setState('question')}
-              className="btn btn-primary px-10 py-3 text-base"
+            <div
+              className="flex items-center gap-2 px-5 py-3 rounded-xl"
+              style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.3)' }}
             >
-              Iniciar Quiz
-            </motion.button>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="#00d4ff" strokeWidth="2" />
+                <path d="M11 18h2" stroke="#00d4ff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <span className="text-sm font-semibold" style={{ color: '#00d4ff' }}>
+                Toque em &quot;Iniciar Quiz&quot; no seu celular
+              </span>
+            </div>
           </motion.div>
         )}
 
@@ -235,6 +291,22 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
                 </motion.div>
               )}
 
+              {/* Responda pelo celular */}
+              {canAnswer && selected === null && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center justify-center gap-2 text-sm font-semibold"
+                  style={{ color: '#00d4ff' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" />
+                    <path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  Escolha a resposta no seu celular
+                </motion.div>
+              )}
+
               {/* Options */}
               <div
                 className="space-y-3"
@@ -262,17 +334,13 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
                   }
 
                   return (
-                    <motion.button
+                    <div
                       key={idx}
-                      whileHover={selected === null ? { scale: 1.01, x: 4 } : {}}
-                      whileTap={selected === null ? { scale: 0.99 } : {}}
-                      onClick={() => handleSelect(idx)}
                       className="w-full p-4 rounded-xl text-left flex items-center gap-4 transition-all duration-200"
                       style={{
                         background: bgColor,
                         border: `1px solid ${borderColor}`,
                         color: textColor,
-                        cursor: selected !== null ? 'default' : 'pointer',
                       }}
                     >
                       <div
@@ -285,7 +353,7 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
                         {showResult && isCorrect ? '✓' : showResult && isSelected ? '✗' : String.fromCharCode(65 + idx)}
                       </div>
                       <span className="text-sm font-medium">{opt}</span>
-                    </motion.button>
+                    </div>
                   );
                 })}
               </div>
@@ -311,19 +379,41 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
               </AnimatePresence>
 
               {selected !== null && (
-                <motion.button
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleNext}
-                  className="w-full btn btn-primary py-3"
+                  className="flex items-center justify-center gap-2 text-sm font-semibold py-2"
+                  style={{ color: '#00d4ff' }}
                 >
-                  {currentQ < deck.length - 1 ? 'Próxima Pergunta' : 'Ver Resultado'}
-                </motion.button>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" />
+                    <path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  {currentQ < deck.length - 1 ? 'Toque em "Próxima" no seu celular' : 'Toque em "Ver resultado" no seu celular'}
+                </motion.div>
               )}
             </motion.div>
           </AnimatePresence>
+        )}
+
+        {/* Analisando */}
+        {state === 'analyzing' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center h-full gap-5 text-center"
+          >
+            <motion.div
+              className="rounded-full"
+              style={{ width: 72, height: 72, border: '4px solid rgba(0,212,255,0.2)', borderTopColor: '#00d4ff' }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            />
+            <div>
+              <h3 className="text-2xl font-bold mb-1" style={{ color: '#00d4ff' }}>Analisando suas respostas...</h3>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>O Detetive está somando os seus pontos.</p>
+            </div>
+          </motion.div>
         )}
 
         {/* Result */}
@@ -383,16 +473,17 @@ export default function QuizScreen({ onNavigate, onAdvance }: QuizScreenProps) {
               })}
             </div>
 
-            <div className="flex gap-3">
-              <button onClick={handleRestart} className="btn btn-ghost">
-                Jogar Novamente
-              </button>
-              <button onClick={onAdvance} className="btn btn-primary">
-                Continuar
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
+            <div
+              className="flex items-center gap-2 px-5 py-3 rounded-xl"
+              style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.3)' }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="#00d4ff" strokeWidth="2" />
+                <path d="M11 18h2" stroke="#00d4ff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <span className="text-sm font-semibold" style={{ color: '#00d4ff' }}>
+                Continue pelo seu celular
+              </span>
             </div>
           </motion.div>
         )}

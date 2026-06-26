@@ -10,10 +10,9 @@ import { CHECKLIST_ITEMS, CHECKLIST_INTRO, CHECKLIST_CLOSING } from '@/data/chec
 
 interface ChecklistScreenProps {
   onNavigate: (screen: Screen) => void;
-  onAdvance: () => void;
 }
 
-export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScreenProps) {
+export default function ChecklistScreen({ onNavigate }: ChecklistScreenProps) {
   const { grantBadge } = useGame();
   const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
@@ -249,12 +248,13 @@ export default function ChecklistScreen({ onNavigate, onAdvance }: ChecklistScre
             {verdict.text}
           </motion.p>
         </div>
-        <button onClick={onAdvance} className="btn btn-primary text-sm py-2 px-5">
-          Continuar
+        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: '#00d4ff' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" />
+            <path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-        </button>
+          Continue no seu celular
+        </div>
       </div>
     </div>
   );

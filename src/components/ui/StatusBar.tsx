@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Screen } from '@/types';
 
 interface StatusBarProps {
@@ -23,24 +23,6 @@ const SCREEN_LABELS: Record<Screen, string> = {
 
 export default function StatusBar({ isOnline, currentScreen, onOpenSettings }: StatusBarProps) {
   const [time, setTime] = useState('');
-  const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const cancelSettingsHold = useCallback(() => {
-    if (settingsTimerRef.current) {
-      clearTimeout(settingsTimerRef.current);
-      settingsTimerRef.current = null;
-    }
-  }, []);
-
-  const startSettingsHold = useCallback(() => {
-    cancelSettingsHold();
-    settingsTimerRef.current = setTimeout(() => {
-      settingsTimerRef.current = null;
-      onOpenSettings();
-    }, 3000);
-  }, [cancelSettingsHold, onOpenSettings]);
-
-  useEffect(() => () => cancelSettingsHold(), [cancelSettingsHold]);
 
   useEffect(() => {
     const update = () => {
@@ -59,16 +41,12 @@ export default function StatusBar({ isOnline, currentScreen, onOpenSettings }: S
         borderBottom: '1px solid rgba(255, 255, 255, 0.10)',
       }}
     >
-      {/* A logo também mantém o acesso oculto ao menu: segure por 3 segundos. */}
+      {/* Clicar na logo abre o menu de configurações (acesso do organizador). */}
       <div
-        className="flex items-center select-none cursor-default"
-        onPointerDown={startSettingsHold}
-        onPointerUp={cancelSettingsHold}
-        onPointerLeave={cancelSettingsHold}
-        onPointerCancel={cancelSettingsHold}
+        className="flex items-center select-none cursor-pointer"
+        onClick={onOpenSettings}
         onContextMenu={(event) => event.preventDefault()}
-        aria-label="Logotipo do Colégio Monsenhor Raeder"
-        style={{ touchAction: 'none' }}
+        aria-label="Abrir configurações do totem"
       >
         <Image
           src="/logo-raeder-pb.png"
