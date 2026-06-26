@@ -213,6 +213,9 @@ function AppShell() {
     } else if (cmd.type === 'cert-sent') {
       // O celular enviou o certificado: o totem reconhece e mostra o sucesso.
       window.dispatchEvent(new CustomEvent('detetive:cert-sent', { detail: { channel: cmd.channel, name: cmd.name } }));
+    } else if (cmd.type && cmd.type.startsWith('photo-')) {
+      // Cabine de fotos: o celular comanda; a webcam é a do totem.
+      window.dispatchEvent(new CustomEvent('detetive:photo', { detail: { action: cmd.type } }));
     } else if (cmd.type === 'hello') {
       fetch('/api/control/send', {
         method: 'POST',
@@ -268,7 +271,7 @@ function AppShell() {
       case 'ai-errors':
         return <AIErrorsScreen onNavigate={navigate} onAdvance={() => advanceFrom('ai-errors')} />;
       case 'certificate':
-        return <CertificateScreen onNavigate={navigate} onComplete={restartSession} />;
+        return <CertificateScreen onNavigate={navigate} onComplete={restartSession} controlCode={sessionCode} />;
       case 'admin':
         return <AdminScreen onNavigate={navigate} />;
       default:

@@ -228,7 +228,8 @@ export async function sendCertificate(
   phone: string,
   pdf: Uint8Array,
   fileName: string,
-  caption: string
+  caption: string,
+  photo?: { buffer: Buffer; caption?: string } | null
 ): Promise<{ ok: boolean; error?: string; messageId?: string }> {
   const connected = await waitForWhatsAppOpen();
   const s = state();
@@ -248,6 +249,18 @@ export async function sendCertificate(
       const contact = result.find((item: any) => item?.exists);
       if (!contact?.jid) return { ok: false, error: 'no-whatsapp' };
       jid = contact.jid;
+    }
+
+    // Foto recordação (polaroid) primeiro — falha dela não impede o certificado.
+    if (photo?.buffer?.length) {
+      try {
+        await s.sock.sendMessage(jid, {
+          image: photo.buffer,
+          caption: photo.caption || 'Sua foto na Feira de Ciências e Tecnologias — Detetive IA',
+        });
+      } catch (photoError) {
+        console.error('[whatsapp] photo send failed (segue com o certificado):', photoError);
+      }
     }
 
     const sent = await s.sock.sendMessage(jid, {

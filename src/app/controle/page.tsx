@@ -33,6 +33,10 @@ export default function ControlPage() {
   const [badges, setBadges] = useState<BadgeId[]>([]);
   const [celebration, setCelebration] = useState<BadgeId | null>(null);
 
+  // Cabine de fotos: estado espelhado do totem + decisão de pular.
+  const [photoState, setPhotoState] = useState<'idle' | 'live' | 'captured' | 'attached' | 'error'>('idle');
+  const [photoSkipped, setPhotoSkipped] = useState(false);
+
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -106,10 +110,15 @@ export default function ControlPage() {
           setDisplayScreen(cmd.screen);
           setDisplayReady(!!cmd.ready);
           if (Array.isArray(cmd.badges)) setBadges(cmd.badges);
-          if (cmd.screen !== 'certificate') { setSent(false); setCertMsg(''); }
+          if (cmd.screen !== 'certificate') {
+            setSent(false); setCertMsg('');
+            setPhotoState('idle'); setPhotoSkipped(false);
+          }
         } else if (cmd?.from === 'display' && cmd.type === 'badge' && cmd.badge) {
           setCelebration(cmd.badge);
           setBadges((prev) => (prev.includes(cmd.badge) ? prev : [...prev, cmd.badge]));
+        } else if (cmd?.from === 'display' && cmd.type === 'photo-state' && cmd.photoState) {
+          setPhotoState(cmd.photoState);
         }
       } catch { /* ignore */ }
     };
@@ -153,8 +162,8 @@ export default function ControlPage() {
     setCertMsg('');
     try {
       const body = channel === 'whatsapp'
-        ? { name: name.trim(), phone: phone.trim() }
-        : { name: name.trim(), email: email.trim() };
+        ? { name: name.trim(), phone: phone.trim(), code }
+        : { name: name.trim(), email: email.trim(), code };
       const r = await fetch('/api/certificate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -351,8 +360,16 @@ export default function ControlPage() {
                           {channel === 'email' ? 'Você receberá o certificado em breve.' : 'Confira o seu WhatsApp.'} O totem já está pronto para o próximo.
                         </p>
                       </motion.div>
+                    ) : (!photoSkipped && photoState !== 'attached') ? (
+                      <PhotoBooth photoState={photoState} send={send} onSkip={() => setPhotoSkipped(true)} />
                     ) : (
                       <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+                        {photoState === 'attached' && (
+                          <div className="flex items-center justify-between gap-2 mb-3 rounded-xl px-3 py-2" style={{ background: 'rgba(0,221,102,0.1)', border: '1px solid rgba(0,221,102,0.35)' }}>
+                            <span className="text-sm font-semibold" style={{ color: '#00dd66' }}>Foto anexada</span>
+                            <button onClick={() => send({ type: 'photo-start' })} className="text-xs underline" style={{ color: 'rgba(155,200,230,0.9)' }}>Refazer</button>
+                          </div>
+                        )}
                         <p className="text-sm mb-3" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>Preencha para receber o seu certificado:</p>
                         <Field value={name} onChange={setName} placeholder="Nome completo" />
                         <div className="h-3" />
@@ -367,6 +384,9 @@ export default function ControlPage() {
                           <Field value={phone} onChange={setPhone} placeholder="WhatsApp com DDD" inputMode="tel" />
                         ) : (
                           <Field value={email} onChange={setEmail} placeholder="seu@email.com" inputMode="text" />
+                        )}
+                        {channel === 'email' && photoState === 'attached' && (
+                          <p className="text-xs mt-2" style={{ color: 'var(--text-muted, #7d93a8)' }}>A foto recordação é enviada apenas pelo WhatsApp.</p>
                         )}
                         <div className="h-4" />
                         <BigButton onClick={sendCertificate} disabled={sending} glow>
@@ -401,6 +421,74 @@ export default function ControlPage() {
         {celebration && <SealCelebration badge={celebration} />}
       </AnimatePresence>
     </main>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+type BoothState = 'idle' | 'live' | 'captured' | 'attached' | 'error';
+
+function PhotoBooth({ photoState, send, onSkip }: { photoState: BoothState; send: (c: Record<string, unknown>) => void; onSkip: () => void }) {
+  const GhostBtn = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
+    <button
+      onClick={onClick}
+      className="mt-3 w-full py-3 rounded-xl text-sm font-medium"
+      style={{ border: '1px solid rgba(0,212,255,0.2)', color: 'rgba(155,200,230,0.9)', background: 'transparent' }}
+    >
+      {children}
+    </button>
+  );
+
+  return (
+    <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+      {photoState === 'idle' && (
+        <>
+          <p className="text-base font-bold mb-1" style={{ color: '#00d4ff' }}>Quer uma foto recordação?</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>
+            A câmera do totem tira uma polaroid com o tema da Feira — ela vai junto no seu WhatsApp.
+          </p>
+          <BigButton onClick={() => send({ type: 'photo-start' })} glow>
+            <CameraIcon /> Tirar foto
+          </BigButton>
+          <GhostBtn onClick={() => { onSkip(); send({ type: 'photo-skip' }); }}>Pular, ir ao certificado</GhostBtn>
+        </>
+      )}
+
+      {photoState === 'live' && (
+        <>
+          <p className="text-base font-bold mb-1" style={{ color: '#00d4ff' }}>Posicione-se em frente ao totem</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>Quando estiver pronto, dispare — conta 3, 2, 1.</p>
+          <BigButton onClick={() => send({ type: 'photo-shoot' })} glow>
+            <CameraIcon /> Disparar
+          </BigButton>
+          <GhostBtn onClick={() => send({ type: 'photo-skip' })}>Cancelar</GhostBtn>
+        </>
+      )}
+
+      {photoState === 'captured' && (
+        <>
+          <p className="text-base font-bold mb-1" style={{ color: '#00d4ff' }}>Foto tirada!</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>Veja a prévia no totem. Quer usar esta ou refazer?</p>
+          <BigButton onClick={() => send({ type: 'photo-confirm' })} glow>Usar esta foto</BigButton>
+          <GhostBtn onClick={() => send({ type: 'photo-retake' })}>Refazer</GhostBtn>
+        </>
+      )}
+
+      {photoState === 'error' && (
+        <>
+          <p className="text-base font-bold mb-1" style={{ color: '#ffaa00' }}>Câmera indisponível</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>Não consegui usar a câmera do totem. Você pode seguir sem foto.</p>
+          <BigButton onClick={() => { onSkip(); send({ type: 'photo-skip' }); }} glow>Continuar sem foto</BigButton>
+        </>
+      )}
+    </div>
   );
 }
 

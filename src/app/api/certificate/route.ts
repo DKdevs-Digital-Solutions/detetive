@@ -3,6 +3,7 @@ import { buildCertificatePdf } from '@/lib/certificate';
 import { sendCertificate } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
 import { appendCertRecord, readCertRecords, toCsv } from '@/lib/certLog';
+import { getPhoto, clearPhoto, dataUrlToBuffer } from '@/lib/photoStore';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,8 +12,9 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, phone, email } = await request.json();
+    const { name, phone, email, code } = await request.json();
     const cleanName = (name || '').toString().trim();
+    const room = (code || '').toString().trim().toUpperCase();
     if (!cleanName) {
       return NextResponse.json({ ok: false, error: 'missing-fields' }, { status: 400 });
     }
@@ -45,7 +47,18 @@ export async function POST(request: NextRequest) {
     const fileName = `Certificado-${safe}.pdf`;
     const caption = `Parabéns, ${cleanName}! Aqui está o seu certificado de participação na Feira de Ciências e Tecnologias. — Colégio Monsenhor Raeder • Detetive IA`;
 
-    const result = await sendCertificate(phone.toString().trim(), pdf, fileName, caption);
+    // Foto recordação (polaroid) guardada para esta sessão, se houver.
+    let photo: { buffer: Buffer; caption?: string } | null = null;
+    if (room) {
+      const dataUrl = getPhoto(room);
+      if (dataUrl) {
+        const decoded = dataUrlToBuffer(dataUrl);
+        if (decoded) photo = { buffer: decoded.buffer, caption: `Olha a sua foto na Feira, ${cleanName}! — Detetive IA` };
+      }
+    }
+
+    const result = await sendCertificate(phone.toString().trim(), pdf, fileName, caption, photo);
+    if (room) clearPhoto(room); // some após o envio (não persiste)
     if (!result.ok) {
       const clientError = result.error === 'invalid-phone' || result.error === 'no-whatsapp';
       return NextResponse.json(result, { status: clientError ? 400 : 502 });
