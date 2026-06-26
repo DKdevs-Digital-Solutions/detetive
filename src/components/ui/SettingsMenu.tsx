@@ -125,15 +125,12 @@ export default function SettingsMenu({ open, onClose, onNavigate }: Props) {
                 </div>
               </div>
 
-              {/* Controlador (tablet fixo) */}
+              {/* Controlador (celular do visitante via QR) */}
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Controlador (tablet)</p>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Controlador (celular)</p>
                 <div className="rounded-xl p-4" style={{ background: 'rgba(0,20,40,0.4)', border: '1px solid rgba(0,212,255,0.15)' }}>
-                  <p className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
-                    No tablet, abra o endereço abaixo — ele <strong style={{ color: '#00d4ff' }}>pareia automaticamente</strong> e acompanha a jornada (avançar fases e teclado do certificado):
-                  </p>
-                  <p className="text-sm font-semibold" style={{ color: '#00d4ff' }}>
-                    {typeof window !== 'undefined' ? `${window.location.origin}/controle` : '/controle'}
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    O visitante <strong style={{ color: '#00d4ff' }}>escaneia o QR da tela inicial</strong> com o próprio celular para conduzir a jornada (avançar fases e teclado do certificado). Cada sessão gera um QR novo e <strong style={{ color: '#00d4ff' }}>trava no primeiro celular</strong> que parear.
                   </p>
                 </div>
               </div>

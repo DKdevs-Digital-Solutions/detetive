@@ -20,7 +20,10 @@ import { GameProvider, useGame } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
 import { JOURNEY } from '@/lib/game';
 import { PRAISE } from '@/data/narration';
-import { CONTROL_ROOM } from '@/lib/control';
+
+// Código curto e único por sessão. Vira o "endereço" do controle remoto e expira
+// (gera-se outro) sempre que a sessão reinicia — trava o controle a uma sessão.
+const genCode = () => Math.random().toString(36).slice(2, 7).toUpperCase();
 
 export default function App() {
   return (
@@ -47,6 +50,16 @@ function AppShell() {
 
   const screenRef = useRef<Screen>('home');
   useEffect(() => { screenRef.current = screen; }, [screen]);
+
+  // Sessão do controle remoto (código por sessão, lido pelo QR na Home).
+  const [sessionCode, setSessionCode] = useState('');
+  const sessionCodeRef = useRef('');
+  useEffect(() => { sessionCodeRef.current = sessionCode; }, [sessionCode]);
+  useEffect(() => { setSessionCode(genCode()); }, []);
+
+  const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+  const controlUrl = origin && sessionCode ? `${origin}/controle?code=${sessionCode}` : '';
 
   // Estado global de fala: qualquer tela pode bloquear o reconhecimento de ordens
   // enquanto o Detetive estiver lendo ou respondendo.
@@ -106,6 +119,7 @@ function AppShell() {
     setCelebration(null);
     resetJourney();
     setScreen('home');
+    setSessionCode(genCode()); // nova sessão → novo QR; o controle anterior expira
   }, [resetJourney, stopSpeak]);
 
   // Timer de inatividade (configurável; 0 = desligado)
@@ -156,8 +170,8 @@ function AppShell() {
     fetch('/api/whatsapp').catch(() => {});
   }, []);
 
-  // ─── Controle remoto (tablet fixo, sala fixa — sem código) ───────────────────
-  // O controlador (/controle) acompanha a jornada e envia ações sequenciais.
+  // ─── Controle remoto (celular do visitante, código por sessão lido via QR) ────
+  // O controlador (/controle?code=...) acompanha a jornada e envia ações sequenciais.
   const handleControl = useCallback((cmd: { type?: string; screen?: Screen }) => {
     window.dispatchEvent(new Event('detetive:keepalive'));
     if (cmd.type === 'start') {
@@ -173,7 +187,7 @@ function AppShell() {
       fetch('/api/control/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: CONTROL_ROOM, command: { from: 'display', type: 'state', screen: screenRef.current } }),
+        body: JSON.stringify({ code: sessionCodeRef.current, command: { from: 'display', type: 'state', screen: screenRef.current } }),
       }).catch(() => {});
     }
   }, [startJourney, advanceFrom, restartSession, navigate]);
@@ -181,8 +195,10 @@ function AppShell() {
   const handleControlRef = useRef(handleControl);
   useEffect(() => { handleControlRef.current = handleControl; }, [handleControl]);
 
+  // Escuta os comandos do controlador na sala da sessão atual (re-assina ao trocar).
   useEffect(() => {
-    const es = new EventSource(`/api/control/stream?code=${encodeURIComponent(CONTROL_ROOM)}`);
+    if (!sessionCode) return;
+    const es = new EventSource(`/api/control/stream?code=${encodeURIComponent(sessionCode)}`);
     es.onmessage = (e) => {
       try {
         const cmd = JSON.parse(e.data);
@@ -193,22 +209,23 @@ function AppShell() {
       }
     };
     return () => es.close();
-  }, []);
+  }, [sessionCode]);
 
   // Transmite a fase atual para o controlador acompanhar a jornada.
   useEffect(() => {
+    if (!sessionCode) return;
     fetch('/api/control/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: CONTROL_ROOM, command: { from: 'display', type: 'state', screen } }),
+      body: JSON.stringify({ code: sessionCode, command: { from: 'display', type: 'state', screen } }),
     }).catch(() => {});
-  }, [screen]);
+  }, [screen, sessionCode]);
 
   const renderScreen = () => {
     switch (screen) {
       case 'home':
         return (
-          <HomeScreen onStart={startJourney} isOnline={isOnline} />
+          <HomeScreen onStart={startJourney} isOnline={isOnline} controlUrl={controlUrl} />
         );
       case 'assistant':
         return <ConversationScreen onAdvance={() => advanceFrom('assistant')} isOnline={isOnline} />;
@@ -226,7 +243,7 @@ function AppShell() {
         return <AdminScreen onNavigate={navigate} />;
       default:
         return (
-          <HomeScreen onStart={startJourney} isOnline={isOnline} />
+          <HomeScreen onStart={startJourney} isOnline={isOnline} controlUrl={controlUrl} />
         );
     }
   };

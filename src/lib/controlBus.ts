@@ -10,6 +10,7 @@ interface Client {
 
 interface Bus {
   rooms: Map<string, Set<Client>>;
+  owners: Map<string, { owner: string; ts: number }>; // exclusividade por sala
   nextId: number;
 }
 
@@ -17,9 +18,30 @@ const g = globalThis as unknown as { __detetiveControl?: Bus };
 
 function bus(): Bus {
   if (!g.__detetiveControl) {
-    g.__detetiveControl = { rooms: new Map(), nextId: 1 };
+    g.__detetiveControl = { rooms: new Map(), owners: new Map(), nextId: 1 };
   }
   return g.__detetiveControl;
+}
+
+const OWNER_TTL = 15000; // o dono precisa renovar a posse a cada 15s
+
+// Reivindica o controle de uma sala. Concede ao primeiro; renova para o mesmo
+// dono; libera se o dono atual ficou inativo (TTL). Retorna se foi concedido.
+export function claimRoom(room: string, controllerId: string): { granted: boolean; owner: string } {
+  const b = bus();
+  const now = Date.now();
+  const cur = b.owners.get(room);
+  if (!cur || cur.owner === controllerId || now - cur.ts > OWNER_TTL) {
+    b.owners.set(room, { owner: controllerId, ts: now });
+    return { granted: true, owner: controllerId };
+  }
+  return { granted: false, owner: cur.owner };
+}
+
+export function releaseRoom(room: string, controllerId: string): void {
+  const b = bus();
+  const cur = b.owners.get(room);
+  if (cur && cur.owner === controllerId) b.owners.delete(room);
 }
 
 // Registra um cliente (display ou controlador). Retorna a função de remoção.
