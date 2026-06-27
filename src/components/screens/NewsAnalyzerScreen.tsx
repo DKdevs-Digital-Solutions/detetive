@@ -33,8 +33,11 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
   const [revealed, setRevealed] = useState(false);
   const [done, setDone] = useState(false);
 
-  const current = session[caseIndex];
-  const isCorrect = revealed && selected === current.level;
+  // Protege contra índice fora dos limites (mensagens duplicadas do controle
+  // poderiam avançar caseIndex além do último caso e deixar current undefined).
+  const safeIndex = Math.min(caseIndex, total - 1);
+  const current = session[safeIndex];
+  const isCorrect = revealed && !!current && selected === current.level;
 
   const playRef = useRef(playClip);
   useEffect(() => { playRef.current = playClip; }, [playClip]);
@@ -43,6 +46,7 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
   // Lê o caso (clip com id estável do pool); libera o voto ao terminar.
   useEffect(() => {
     if (done) return;
+    if (!current) return;
     if (spokenRef.current === current.id) return;
     spokenRef.current = current.id;
     setSelected(null);
@@ -64,7 +68,7 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
   }, [done]);
 
   const handleVote = (level: ConfidenceLevel) => {
-    if (!canVote || selected !== null || done) return;
+    if (!canVote || selected !== null || done || !current) return;
     setSelected(level);
     setRevealed(true);
     stopSpeaking();
@@ -100,7 +104,7 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
       canVote,
       selected,
       revealed,
-      correctLevel: revealed ? current.level : null,
+      correctLevel: revealed && current ? current.level : null,
       done,
     };
     fetch('/api/control/send', {
@@ -108,7 +112,7 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: controlCode, command: { from: 'display', type: 'news-state', news: payload } }),
     }).catch(() => {});
-  }, [controlCode, caseIndex, total, canVote, selected, revealed, done, current.level]);
+  }, [controlCode, caseIndex, total, canVote, selected, revealed, done, current?.level]);
 
   // Recebe as ações do celular (votar, próximo caso).
   const actionsRef = useRef<(a: string, level?: ConfidenceLevel) => void>(() => {});
@@ -160,7 +164,7 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
 
       {/* Conteúdo */}
       <div className="flex-1 overflow-y-auto p-5 lg:p-10 flex flex-col items-center justify-center">
-        {done ? (
+        {done || !current ? (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-2xl">
             <div className="text-6xl lg:text-7xl mb-4">🕵️</div>
             <h3 className="text-2xl lg:text-4xl font-bold mb-3" style={{ color: '#00d4ff' }}>Casos resolvidos!</h3>
