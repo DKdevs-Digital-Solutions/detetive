@@ -239,6 +239,7 @@ function AppShell() {
     // display (sob a flag de autoplay do kiosk, ou se a página já teve ativação).
     resumeAllAudio();
     if (cmd.type === 'start') {
+      resumeAllAudio(); // destrava o áudio do totem ao iniciar a jornada
       startJourney();
     } else if (cmd.type === 'advance') {
       const s = screenRef.current;

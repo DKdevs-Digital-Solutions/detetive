@@ -4,28 +4,13 @@ import { useCallback, useRef, useEffect, useState } from 'react';
 import { useMotionValue, MotionValue } from 'framer-motion';
 import { splitIntoSentences } from '@/lib/stripMarkdown';
 
-// ─── Destravamento global de áudio ────────────────────────────────────────────
-// Navegadores bloqueiam áudio até um gesto do usuário. Como o totem é conduzido
-// pelo CELULAR, ele pode nunca receber um toque. Registramos um ouvinte global:
-// no PRIMEIRO toque/tecla/clique em qualquer lugar do totem (ex.: o organizador
-// ao preparar, ou um toque na tela), retomamos TODOS os AudioContexts — e o som
-// fica liberado para o resto da sessão. Em produção (kiosk), a flag
-// `--autoplay-policy=no-user-gesture-required` dispensa até esse toque.
+// ─── Destravamento de áudio ───────────────────────────────────────────────────
+// Navegadores bloqueiam áudio até ser liberado. No totem (kiosk) a flag
+// `--autoplay-policy=no-user-gesture-required` já deixa o áudio rodar. O som é
+// efetivamente destravado AO INICIAR A JORNADA: quando o celular manda 'start',
+// o totem chama `resumeAllAudio()` e retoma todos os AudioContexts da sessão.
 const audioContexts = new Set<AudioContext>();
-let unlockRegistered = false;
-function registerAudioUnlock() {
-  if (unlockRegistered || typeof window === 'undefined') return;
-  unlockRegistered = true;
-  const unlock = () => { audioContexts.forEach((c) => { c.resume().catch(() => {}); }); };
-  ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((ev) =>
-    window.addEventListener(ev, unlock, { passive: true })
-  );
-}
 
-// Retoma todos os contextos de áudio. Chamado pelo totem AO INICIAR A JORNADA
-// (comando 'start' do celular) — é o momento natural de liberar o som da sessão.
-// No totem real, a flag de autoplay do kiosk já deixa o áudio rodar; isto
-// garante o resume também em qualquer ambiente onde a página já tenha ativação.
 export function resumeAllAudio() {
   audioContexts.forEach((c) => { c.resume().catch(() => {}); });
 }
@@ -88,7 +73,6 @@ export function useElevenLabsSpeech() {
       analyserRef.current = analyser;
       dataRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
       audioContexts.add(ctx);
-      registerAudioUnlock();
     }
     // Tenta retomar já (funciona se a página já teve qualquer interação — sticky
     // activation — ou se a flag de autoplay estiver liberada no kiosk).
