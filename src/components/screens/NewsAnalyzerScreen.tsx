@@ -69,12 +69,19 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
     stopSpeaking();
     const acerto = level === current.level;
     const idx = caseIndex;
-    // Feedback curto (pré-gravado) e, em seguida, a explicação do caso (pré-gravada).
+    const t = total;
+    // Feedback → explicação → auto-avança para o próximo caso.
     playRef.current(acerto ? 'fb-right' : 'fb-wrong', acerto ? FB_RIGHT : FB_WRONG, () => {
-      playRef.current(`news-${idx}`, NEWS_LESSONS[idx].speech);
+      playRef.current(`news-${idx}`, NEWS_LESSONS[idx].speech, () => {
+        setTimeout(() => {
+          if (idx < t - 1) setCaseIndex((i) => i + 1);
+          else { stopSpeaking(); setDone(true); }
+        }, 1200);
+      });
     });
   };
 
+  // Mantido como fallback caso o áudio falhe e o celular precise avançar manualmente.
   const handleNext = () => {
     if (!revealed) return;
     if (caseIndex < total - 1) setCaseIndex((i) => i + 1);

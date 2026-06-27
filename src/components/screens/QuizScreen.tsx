@@ -51,12 +51,16 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
   const [score, setScore] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(Array(deck.length).fill(null));
   const [canAnswer, setCanAnswer] = useState(false);
+  // Bloqueia "Próxima" enquanto o áudio de feedback + explicação ainda toca.
+  const [isExplaining, setIsExplaining] = useState(false);
 
   const question = deck[currentQ];
   const progress = ((currentQ) / deck.length) * 100;
 
   const spokenQRef = useRef(-1);
   useEffect(() => { playRef.current = playClip; }, [playClip]);
+  // Ref estável para auto-avançar sem closure velha.
+  const handleNextRef = useRef(() => {});
 
   // O Detetive lê a PERGUNTA (áudio pré-gravado); as opções aparecem na tela do
   // totem (a ordem é embaralhada por sessão, então não dá para pré-gravar). Só
@@ -90,22 +94,30 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
     setAnswers(newAnswers);
     const correct = idx === question.correct;
     if (correct) setScore((s) => s + 1);
-    // Feedback curto (pré-gravado) e a explicação da pergunta (pré-gravada).
     const qid = question.id;
     const exp = question.explanation;
+    // Bloqueia próxima; feedback → explicação → auto-avança.
+    setIsExplaining(true);
     playRef.current(correct ? 'fb-right' : 'fb-wrong', correct ? FB_RIGHT : FB_WRONG, () => {
-      playRef.current(`quiz-exp-${qid}`, exp);
+      playRef.current(`quiz-exp-${qid}`, exp, () => {
+        setIsExplaining(false);
+        setTimeout(() => handleNextRef.current(), 1500);
+      });
     });
   };
 
   const handleNext = () => {
     setSelected(null);
+    setIsExplaining(false);
     if (currentQ < deck.length - 1) {
       setCurrentQ((q) => q + 1);
     } else {
-      setState('analyzing'); // mostra "analisando" antes de revelar o resultado
+      setState('analyzing');
     }
   };
+
+  // Mantém o ref sempre atualizado.
+  useEffect(() => { handleNextRef.current = handleNext; });
 
   // "Analisando" → resultado (com o selo e o registro estatístico).
   useEffect(() => {
@@ -159,13 +171,14 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
       explanation: selected !== null ? q?.explanation ?? '' : '',
       score,
       pct,
+      isExplaining,
     };
     fetch('/api/control/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: controlCode, command: { from: 'display', type: 'quiz-state', quiz: payload } }),
     }).catch(() => {});
-  }, [controlCode, state, currentQ, canAnswer, selected, score, pct, deck]);
+  }, [controlCode, state, currentQ, canAnswer, selected, score, pct, deck, isExplaining]);
 
   // Recebe as ações do celular (responder, próxima, jogar de novo).
   const quizActionsRef = useRef<(a: string, idx?: number) => void>(() => {});
@@ -173,7 +186,8 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
     quizActionsRef.current = (action: string, idx?: number) => {
       if (action === 'start') setState('question');
       else if (action === 'select' && typeof idx === 'number') handleSelect(idx);
-      else if (action === 'next') handleNext();
+      // Bloqueia "próxima" enquanto o áudio de explicação ainda toca.
+      else if (action === 'next' && !isExplaining) handleNext();
       else if (action === 'restart') handleRestart();
     };
   });

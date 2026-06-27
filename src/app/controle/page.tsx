@@ -34,6 +34,7 @@ interface QuizInfo {
   explanation: string;
   score: number;
   pct: number;
+  isExplaining: boolean;
 }
 
 type NewsLevel = 'green' | 'yellow' | 'red';
@@ -569,9 +570,21 @@ function QuizControl({ quiz, send, displayReady }: { quiz: QuizInfo | null; send
       {answered && (
         <>
           <div className="h-4" />
-          <BigButton onClick={() => send({ type: 'quiz-next' })} glow>
-            {quiz.index < quiz.total - 1 ? 'Próxima pergunta' : 'Ver resultado'}
-          </BigButton>
+          {quiz.isExplaining ? (
+            <div className="flex items-center justify-center gap-2 py-3 text-sm font-semibold" style={{ color: '#00d4ff' }}>
+              <motion.span
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ background: '#00d4ff' }}
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+              />
+              Ouça a explicação...
+            </div>
+          ) : (
+            <BigButton onClick={() => send({ type: 'quiz-next' })} glow>
+              {quiz.index < quiz.total - 1 ? 'Próxima pergunta' : 'Ver resultado'}
+            </BigButton>
+          )}
         </>
       )}
     </div>

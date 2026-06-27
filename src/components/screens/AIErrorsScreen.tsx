@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Screen } from '@/types';
-import { AI_JUDGE_CASES, judgeCasePrompt, judgeRevealLine } from '@/data/aiErrors';
+import { AI_JUDGE_CASES, judgeCasePrompt, judgeRevealLine, AIERR_INTRO } from '@/data/aiErrors';
 import { FB_RIGHT, FB_WRONG } from '@/data/narration';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import Avatar from '@/components/ui/Avatar';
@@ -17,6 +17,7 @@ export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScre
   const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
   const total = AI_JUDGE_CASES.length;
+  const [introPlayed, setIntroPlayed] = useState(false);
   const [caseIndex, setCaseIndex] = useState(0);
   const [canVote, setCanVote] = useState(false);
   const [selected, setSelected] = useState<boolean | null>(null); // true = "acertou", false = "errou"
@@ -30,8 +31,19 @@ export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScre
   useEffect(() => { playRef.current = playClip; }, [playClip]);
   const spokenRef = useRef(-1);
 
-  // Lê o caso (áudio pré-gravado); libera o voto ao terminar.
+  // Intro narrada: explica a fase antes de começar os casos.
   useEffect(() => {
+    const t = setTimeout(() => {
+      playRef.current('aierr-intro', AIERR_INTRO, () => setIntroPlayed(true));
+    }, 500);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Lê o caso (áudio pré-gravado); libera o voto ao terminar.
+  // Aguarda o intro terminar antes de iniciar.
+  useEffect(() => {
+    if (!introPlayed) return;
     if (done) return;
     if (spokenRef.current === caseIndex) return;
     spokenRef.current = caseIndex;
@@ -44,7 +56,7 @@ export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScre
     playRef.current(`judge-case-${caseIndex}`, judgeCasePrompt(c, caseIndex), unlock);
     const safety = setTimeout(unlock, 16000);
     return () => clearTimeout(safety);
-  }, [caseIndex, done]);
+  }, [caseIndex, done, introPlayed]);
 
   useEffect(() => () => { stopSpeaking(); }, [stopSpeaking]);
 
@@ -60,12 +72,19 @@ export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScre
     stopSpeaking();
     const acerto = verdict === current.aiCorrect;
     const idx = caseIndex;
-    // Feedback curto (pré-gravado) e a revelação do caso (pré-gravada).
+    const t = total;
+    // Feedback → revelação → auto-avança para o próximo caso.
     playRef.current(acerto ? 'fb-right' : 'fb-wrong', acerto ? FB_RIGHT : FB_WRONG, () => {
-      playRef.current(`judge-reveal-${idx}`, judgeRevealLine(AI_JUDGE_CASES[idx]));
+      playRef.current(`judge-reveal-${idx}`, judgeRevealLine(AI_JUDGE_CASES[idx]), () => {
+        setTimeout(() => {
+          if (idx < t - 1) setCaseIndex((i) => i + 1);
+          else { stopSpeaking(); setDone(true); }
+        }, 1200);
+      });
     });
   };
 
+  // Mantido como fallback caso o áudio falhe e o celular precise avançar manualmente.
   const handleNext = () => {
     if (!revealed) return;
     if (caseIndex < total - 1) setCaseIndex((i) => i + 1);

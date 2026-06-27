@@ -1,4 +1,4 @@
-import { AI_JUDGE_CASES, judgeCasePrompt, judgeRevealLine } from './aiErrors';
+import { AI_JUDGE_CASES, judgeCasePrompt, judgeRevealLine, AIERR_INTRO } from './aiErrors';
 import { NEWS_LESSONS, newsCasePrompt } from './news';
 import { CHECKLIST_ITEMS, CHECKLIST_INTRO, CHECKLIST_CLOSING } from './checklist';
 import { QUIZ_QUESTIONS } from './quiz';
@@ -42,7 +42,8 @@ export const CLIPS: Clip[] = [
   ...NEWS_LESSONS.map((l, i) => ({ id: `news-case-${i}`, text: newsCasePrompt(l, i) })),
   ...NEWS_LESSONS.map((l, i) => ({ id: `news-${i}`, text: l.speech })),
 
-  // A IA acertou ou errou? (interativo): leitura do caso + revelação.
+  // A IA acertou ou errou? (interativo): intro + leitura do caso + revelação.
+  { id: 'aierr-intro', text: AIERR_INTRO },
   ...AI_JUDGE_CASES.map((c, i) => ({ id: `judge-case-${i}`, text: judgeCasePrompt(c, i) })),
   ...AI_JUDGE_CASES.map((c, i) => ({ id: `judge-reveal-${i}`, text: judgeRevealLine(c) })),
 
