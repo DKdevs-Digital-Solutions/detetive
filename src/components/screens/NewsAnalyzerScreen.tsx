@@ -6,7 +6,8 @@ import { Screen, ConfidenceLevel } from '@/types';
 import TrafficLight from '@/components/ui/TrafficLight';
 import Avatar from '@/components/ui/Avatar';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
-import { NEWS_LESSONS } from '@/data/news';
+import { NEWS_LESSONS, newsCasePrompt } from '@/data/news';
+import { FB_RIGHT, FB_WRONG } from '@/data/narration';
 
 interface NewsAnalyzerScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -21,7 +22,7 @@ const LEVELS: { level: ConfidenceLevel; label: string; emoji: string; color: str
 ];
 
 export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnalyzerScreenProps) {
-  const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
+  const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
   const total = NEWS_LESSONS.length;
   const [caseIndex, setCaseIndex] = useState(0);
@@ -33,11 +34,11 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
   const current = NEWS_LESSONS[caseIndex];
   const isCorrect = revealed && selected === current.level;
 
-  const speakRef = useRef(speak);
-  useEffect(() => { speakRef.current = speak; }, [speak]);
+  const playRef = useRef(playClip);
+  useEffect(() => { playRef.current = playClip; }, [playClip]);
   const spokenRef = useRef(-1);
 
-  // Lê o caso atual (Detetive); libera o voto ao terminar de ler.
+  // Lê o caso atual (áudio pré-gravado); libera o voto ao terminar de ler.
   useEffect(() => {
     if (done) return;
     if (spokenRef.current === caseIndex) return;
@@ -48,7 +49,7 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
     const c = NEWS_LESSONS[caseIndex];
     let unlocked = false;
     const unlock = () => { if (!unlocked) { unlocked = true; setCanVote(true); } };
-    speakRef.current(`Caso ${caseIndex + 1}. ${c.headline}. O que você acha: confiável, atenção, ou suspeita?`, unlock);
+    playRef.current(`news-case-${caseIndex}`, newsCasePrompt(c, caseIndex), unlock);
     const safety = setTimeout(unlock, 14000);
     return () => clearTimeout(safety);
   }, [caseIndex, done]);
@@ -67,7 +68,11 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
     setRevealed(true);
     stopSpeaking();
     const acerto = level === current.level;
-    speakRef.current(`${acerto ? 'Boa, detetive!' : 'Quase!'} ${current.speech}`);
+    const idx = caseIndex;
+    // Feedback curto (pré-gravado) e, em seguida, a explicação do caso (pré-gravada).
+    playRef.current(acerto ? 'fb-right' : 'fb-wrong', acerto ? FB_RIGHT : FB_WRONG, () => {
+      playRef.current(`news-${idx}`, NEWS_LESSONS[idx].speech);
+    });
   };
 
   const handleNext = () => {

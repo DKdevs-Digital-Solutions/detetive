@@ -132,6 +132,12 @@ export const AI_JUDGE_CASES: AIJudgeCase[] = [
   },
 ];
 
+// Leitura do caso e revelação (texto FIXO → pré-gravável). Usados na tela E no gerador.
+export const judgeCasePrompt = (c: AIJudgeCase, i: number): string =>
+  `Caso ${i + 1}. Perguntaram à inteligência artificial: ${c.question} E ela respondeu: ${c.answer}. A IA acertou ou errou?`;
+export const judgeRevealLine = (c: AIJudgeCase): string =>
+  `A IA ${c.aiCorrect ? 'acertou' : 'errou'}. ${c.explanation}`;
+
 // ─── Narração fixa (pré-gravável em MP3) ───────────────────────────────────────
 export const AIERR_INTRO =
   'Você sabia que a inteligência artificial pode errar? Vou te mostrar alguns tipos de erro que ela comete. Preste atenção em cada um.';

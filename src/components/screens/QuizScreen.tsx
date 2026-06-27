@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Screen, QuizQuestion } from '@/types';
 import { QUIZ_QUESTIONS } from '@/data/quiz';
+import { FB_RIGHT, FB_WRONG } from '@/data/narration';
 import { useGame } from '@/context/GameProvider';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 
@@ -41,7 +42,8 @@ function buildDeck(): QuizQuestion[] {
 
 export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps) {
   const { grantBadge } = useGame();
-  const { speak, stop: stopSpeaking } = useElevenLabsSpeech();
+  const { playClip, stop: stopSpeaking } = useElevenLabsSpeech();
+  const playRef = useRef(playClip);
   const [deck, setDeck] = useState<QuizQuestion[]>(() => buildDeck());
   const [state, setState] = useState<QuizState>('intro');
   const [currentQ, setCurrentQ] = useState(0);
@@ -54,21 +56,23 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
   const progress = ((currentQ) / deck.length) * 100;
 
   const spokenQRef = useRef(-1);
+  useEffect(() => { playRef.current = playClip; }, [playClip]);
 
-  // O Detetive lê cada pergunta em voz alta; só libera as respostas ao terminar.
+  // O Detetive lê a PERGUNTA (áudio pré-gravado); as opções aparecem na tela do
+  // totem (a ordem é embaralhada por sessão, então não dá para pré-gravar). Só
+  // libera as respostas ao terminar de ler.
   useEffect(() => {
     if (state === 'question' && question && spokenQRef.current !== currentQ) {
       spokenQRef.current = currentQ;
       setCanAnswer(false);
-      const optionsText = question.options.map((o, i) => `Opção ${String.fromCharCode(65 + i)}: ${o}.`).join(' ');
       let unlocked = false;
       const unlock = () => { if (!unlocked) { unlocked = true; setCanAnswer(true); } };
-      speak(`${question.question} ${optionsText}`, unlock);
+      playRef.current(`quiz-q-${question.id}`, question.question, unlock);
       // Segurança: libera mesmo se o áudio falhar ou não terminar.
       const safety = setTimeout(unlock, 15000);
       return () => clearTimeout(safety);
     }
-  }, [state, currentQ, question, speak]);
+  }, [state, currentQ, question]);
 
   // Para a fala ao sair da fase.
   useEffect(() => () => { stopSpeaking(); }, [stopSpeaking]);
@@ -86,8 +90,12 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
     setAnswers(newAnswers);
     const correct = idx === question.correct;
     if (correct) setScore((s) => s + 1);
-    // O Detetive reage e lê a explicação (mais fala que leitura).
-    speak(`${correct ? 'Isso! Resposta certa.' : 'Quase! Olha só.'} ${question.explanation}`);
+    // Feedback curto (pré-gravado) e a explicação da pergunta (pré-gravada).
+    const qid = question.id;
+    const exp = question.explanation;
+    playRef.current(correct ? 'fb-right' : 'fb-wrong', correct ? FB_RIGHT : FB_WRONG, () => {
+      playRef.current(`quiz-exp-${qid}`, exp);
+    });
   };
 
   const handleNext = () => {

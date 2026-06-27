@@ -12,7 +12,7 @@
 import { mkdir, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
 
-const BASE = process.env.BASE_URL || 'http://localhost:3001';
+const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const OUT = path.join(process.cwd(), 'public', 'audio');
 const FORCE = process.argv.includes('--force');
 

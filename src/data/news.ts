@@ -8,6 +8,10 @@ export interface NewsLesson {
   speech: string;
 }
 
+// Leitura do caso (texto FIXO → pré-gravável). Usado na tela E no gerador de áudio.
+export const newsCasePrompt = (l: NewsLesson, i: number): string =>
+  `Caso ${i + 1}. ${l.headline}. O que você acha: confiável, atenção, ou suspeita?`;
+
 export const NEWS_INTRO =
   'Toda notícia deixa pistas, como num caso de detetive. Eu uso um semáforo da confiança: verde é confiável, amarelo pede atenção, e vermelho é perigo. Vou te mostrar três exemplos. Preste atenção nas pistas.';
 export const NEWS_CLOSING =

@@ -7,6 +7,7 @@ import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
 import { useGame } from '@/context/GameProvider';
 import { useSettings } from '@/context/SettingsProvider';
+import { CONV_GREETING, CONV_CLOSING, CONV_TIMEOUT } from '@/data/narration';
 
 interface Props {
   onAdvance: () => void;
@@ -18,17 +19,11 @@ type Phase = 'greeting' | 'listening' | 'thinking' | 'answering' | 'done';
 const MAX_QUESTIONS = 3;
 const IDLE_MS = 22_000; // sem pergunta por esse tempo → segue para o certificado
 
-const GREETING =
-  'Última missão, detetive! Agora é a sua vez de interrogar a inteligência artificial. Faça até três perguntas sobre IA ou fake news. Pode mandar a primeira.';
-const CLOSING =
-  'Caso encerrado, detetive! Foi uma honra investigar com você. Vou preparar o seu certificado.';
-const TIMEOUT_LINE =
-  'Sem mais perguntas, detetive? Então vamos direto ao seu certificado!';
 
 export default function ConversationScreen({ onAdvance, isOnline }: Props) {
   const { grantBadge } = useGame();
   const { sound } = useSettings();
-  const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
+  const { speak, playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
   const [phase, setPhase] = useState<Phase>('greeting');
   const [questionCount, setQuestionCount] = useState(0);
@@ -41,6 +36,8 @@ export default function ConversationScreen({ onAdvance, isOnline }: Props) {
   const historyRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const speakRef = useRef(speak);
   useEffect(() => { speakRef.current = speak; }, [speak]);
+  const playRef = useRef(playClip);
+  useEffect(() => { playRef.current = playClip; }, [playClip]);
   // beginListening e handleQuestion se chamam mutuamente; o ref quebra o ciclo.
   const beginListeningRef = useRef<() => void>(() => {});
 
@@ -51,23 +48,29 @@ export default function ConversationScreen({ onAdvance, isOnline }: Props) {
     }
   }, []);
 
-  // Fala (ou só mostra texto, se a voz estiver desligada) e chama onDone ao terminar.
+  // Fala DINÂMICA ao vivo (respostas da IA). Gated por sound.
   const say = useCallback((text: string, onDone?: () => void) => {
     if (!sound) { onDone?.(); return; }
     speakRef.current(text, onDone);
   }, [sound]);
 
+  // Fala FIXA pré-gravada (saudação/fechos) — economiza token. Gated por sound.
+  const sayClip = useCallback((id: string, text: string, onDone?: () => void) => {
+    if (!sound) { onDone?.(); return; }
+    playRef.current(id, text, onDone);
+  }, [sound]);
+
   // Encerra a fase e vai para o certificado (uma única vez).
-  const finish = useCallback((spokenLine?: string) => {
+  const finish = useCallback((clipId?: string, text?: string) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
     clearIdle();
     grantBadge('assistant'); // selo da última fase
     setPhase('done');
     const go = () => onAdvance();
-    if (spokenLine && sound) say(spokenLine, go);
+    if (clipId && text) sayClip(clipId, text, go);
     else { stopSpeaking(); setTimeout(go, 400); }
-  }, [clearIdle, grantBadge, onAdvance, say, sound, stopSpeaking]);
+  }, [clearIdle, grantBadge, onAdvance, sayClip, stopSpeaking]);
 
   // Recebe a pergunta falada → consulta a IA → fala a resposta.
   const handleQuestion = useCallback((raw: string) => {
@@ -97,7 +100,7 @@ export default function ConversationScreen({ onAdvance, isOnline }: Props) {
         setPhase('answering');
         say(content, () => {
           if (finishedRef.current) return;
-          if (n >= MAX_QUESTIONS) finish(CLOSING);
+          if (n >= MAX_QUESTIONS) finish('conv-closing', CONV_CLOSING);
           else beginListeningRef.current();
         });
       })
@@ -120,14 +123,14 @@ export default function ConversationScreen({ onAdvance, isOnline }: Props) {
   // Começa a ouvir a próxima pergunta (ou encerra ao atingir o limite).
   const beginListening = useCallback(() => {
     if (finishedRef.current) return;
-    if (countRef.current >= MAX_QUESTIONS) { finish(CLOSING); return; }
+    if (countRef.current >= MAX_QUESTIONS) { finish('conv-closing', CONV_CLOSING); return; }
     setPhase('listening');
     // pequeno atraso garante que o TTS terminou e liberou o microfone
     setTimeout(() => {
       if (finishedRef.current) return;
       startListening();
       clearIdle();
-      idleTimerRef.current = setTimeout(() => finish(TIMEOUT_LINE), IDLE_MS);
+      idleTimerRef.current = setTimeout(() => finish('conv-timeout', CONV_TIMEOUT), IDLE_MS);
     }, 350);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearIdle, finish, startListening]);
@@ -145,7 +148,7 @@ export default function ConversationScreen({ onAdvance, isOnline }: Props) {
   useEffect(() => {
     grantBadge('assistant');
     const t = setTimeout(() => {
-      say(GREETING, () => { if (!finishedRef.current) beginListening(); });
+      sayClip('conv-greeting', CONV_GREETING, () => { if (!finishedRef.current) beginListening(); });
     }, 500);
     return () => {
       clearTimeout(t);

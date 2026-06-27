@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Screen } from '@/types';
-import { AI_JUDGE_CASES } from '@/data/aiErrors';
+import { AI_JUDGE_CASES, judgeCasePrompt, judgeRevealLine } from '@/data/aiErrors';
+import { FB_RIGHT, FB_WRONG } from '@/data/narration';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import Avatar from '@/components/ui/Avatar';
 
@@ -13,7 +14,7 @@ interface AIErrorsScreenProps {
 }
 
 export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScreenProps) {
-  const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
+  const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
   const total = AI_JUDGE_CASES.length;
   const [caseIndex, setCaseIndex] = useState(0);
@@ -25,11 +26,11 @@ export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScre
   const current = AI_JUDGE_CASES[caseIndex];
   const isCorrect = revealed && selected === current.aiCorrect;
 
-  const speakRef = useRef(speak);
-  useEffect(() => { speakRef.current = speak; }, [speak]);
+  const playRef = useRef(playClip);
+  useEffect(() => { playRef.current = playClip; }, [playClip]);
   const spokenRef = useRef(-1);
 
-  // Lê o caso (pergunta + resposta da IA); libera o voto ao terminar.
+  // Lê o caso (áudio pré-gravado); libera o voto ao terminar.
   useEffect(() => {
     if (done) return;
     if (spokenRef.current === caseIndex) return;
@@ -40,7 +41,7 @@ export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScre
     const c = AI_JUDGE_CASES[caseIndex];
     let unlocked = false;
     const unlock = () => { if (!unlocked) { unlocked = true; setCanVote(true); } };
-    speakRef.current(`Caso ${caseIndex + 1}. Perguntaram à inteligência artificial: ${c.question} E ela respondeu: ${c.answer}. A IA acertou ou errou?`, unlock);
+    playRef.current(`judge-case-${caseIndex}`, judgeCasePrompt(c, caseIndex), unlock);
     const safety = setTimeout(unlock, 16000);
     return () => clearTimeout(safety);
   }, [caseIndex, done]);
@@ -58,7 +59,11 @@ export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScre
     setRevealed(true);
     stopSpeaking();
     const acerto = verdict === current.aiCorrect;
-    speakRef.current(`${acerto ? 'Isso, detetive!' : 'Olha de novo!'} A IA ${current.aiCorrect ? 'acertou' : 'errou'}. ${current.explanation}`);
+    const idx = caseIndex;
+    // Feedback curto (pré-gravado) e a revelação do caso (pré-gravada).
+    playRef.current(acerto ? 'fb-right' : 'fb-wrong', acerto ? FB_RIGHT : FB_WRONG, () => {
+      playRef.current(`judge-reveal-${idx}`, judgeRevealLine(AI_JUDGE_CASES[idx]));
+    });
   };
 
   const handleNext = () => {
