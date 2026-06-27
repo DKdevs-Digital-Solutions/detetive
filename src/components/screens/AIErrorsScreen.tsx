@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Screen } from '@/types';
-import { AI_JUDGE_CASES, judgeCasePrompt, judgeRevealLine, AIERR_INTRO } from '@/data/aiErrors';
+import { pickAIJudgeCases, judgeCasePrompt, judgeRevealLine, AIERR_INTRO } from '@/data/aiErrors';
 import { FB_RIGHT, FB_WRONG } from '@/data/narration';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import Avatar from '@/components/ui/Avatar';
@@ -16,20 +16,22 @@ interface AIErrorsScreenProps {
 export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScreenProps) {
   const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
-  const total = AI_JUDGE_CASES.length;
+  // Sorteia 5 casos ao montar — estável durante toda a sessão.
+  const [session] = useState(() => pickAIJudgeCases(5));
+  const total = session.length;
   const [introPlayed, setIntroPlayed] = useState(false);
   const [caseIndex, setCaseIndex] = useState(0);
   const [canVote, setCanVote] = useState(false);
-  const [selected, setSelected] = useState<boolean | null>(null); // true = "acertou", false = "errou"
+  const [selected, setSelected] = useState<boolean | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [done, setDone] = useState(false);
 
-  const current = AI_JUDGE_CASES[caseIndex];
+  const current = session[caseIndex];
   const isCorrect = revealed && selected === current.aiCorrect;
 
   const playRef = useRef(playClip);
   useEffect(() => { playRef.current = playClip; }, [playClip]);
-  const spokenRef = useRef(-1);
+  const spokenRef = useRef(-1); // armazena o id estável do caso já narrado
 
   // Intro narrada: explica a fase antes de começar os casos.
   useEffect(() => {
@@ -40,23 +42,22 @@ export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScre
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Lê o caso (áudio pré-gravado); libera o voto ao terminar.
+  // Lê o caso (clip com id estável do pool); libera o voto ao terminar.
   // Aguarda o intro terminar antes de iniciar.
   useEffect(() => {
     if (!introPlayed) return;
     if (done) return;
-    if (spokenRef.current === caseIndex) return;
-    spokenRef.current = caseIndex;
+    if (spokenRef.current === current.id) return;
+    spokenRef.current = current.id;
     setSelected(null);
     setRevealed(false);
     setCanVote(false);
-    const c = AI_JUDGE_CASES[caseIndex];
     let unlocked = false;
     const unlock = () => { if (!unlocked) { unlocked = true; setCanVote(true); } };
-    playRef.current(`judge-case-${caseIndex}`, judgeCasePrompt(c, caseIndex), unlock);
+    playRef.current(`judge-case-${current.id}`, judgeCasePrompt(current), unlock);
     const safety = setTimeout(unlock, 16000);
     return () => clearTimeout(safety);
-  }, [caseIndex, done, introPlayed]);
+  }, [caseIndex, done, introPlayed, current]);
 
   useEffect(() => () => { stopSpeaking(); }, [stopSpeaking]);
 
@@ -71,11 +72,13 @@ export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScre
     setRevealed(true);
     stopSpeaking();
     const acerto = verdict === current.aiCorrect;
+    const caseId = current.id;
+    const revealText = judgeRevealLine(current);
     const idx = caseIndex;
     const t = total;
     // Feedback → revelação → auto-avança para o próximo caso.
     playRef.current(acerto ? 'fb-right' : 'fb-wrong', acerto ? FB_RIGHT : FB_WRONG, () => {
-      playRef.current(`judge-reveal-${idx}`, judgeRevealLine(AI_JUDGE_CASES[idx]), () => {
+      playRef.current(`judge-reveal-${caseId}`, revealText, () => {
         setTimeout(() => {
           if (idx < t - 1) setCaseIndex((i) => i + 1);
           else { stopSpeaking(); setDone(true); }

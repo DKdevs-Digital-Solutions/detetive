@@ -8,100 +8,30 @@ export interface AIErrorExample {
   color: string;
 }
 
-export const AI_ERROR_EXAMPLES: AIErrorExample[] = [
-  {
-    id: 1,
-    category: 'Alucinação',
-    question: 'Quais são os livros escritos por [autor fictício]?',
-    wrongAnswer:
-      '"Sombras do Amanhã" (2018), "O Último Código" (2020) e "Memórias Digitais" (2022). São obras muito aclamadas pela crítica.',
-    correctAnswer:
-      'Esse autor não existe. A IA inventou títulos de livros com detalhes convincentes — datas, títulos, elogios — mas tudo é falso.',
-    explanation:
-      'A IA pode "alucinar": criar informações inexistentes de forma muito convincente. Isso é perigoso porque a resposta parece verdadeira.',
-    color: '#ff3344',
-  },
-  {
-    id: 2,
-    category: 'Informação desatualizada',
-    question: 'Quem é o presidente do Brasil?',
-    wrongAnswer:
-      'Responde com um nome desatualizado, pois a IA tem uma "data de corte" e não conhece eventos recentes após esse ponto.',
-    correctAnswer:
-      'A IA pode não ter informações sobre o presidente atual se ele foi eleito após sua data de treinamento.',
-    explanation:
-      'Modelos de IA são treinados com dados até uma certa data. Eventos que aconteceram depois disso são desconhecidos para ela.',
-    color: '#ffaa00',
-  },
-  {
-    id: 3,
-    category: 'Contexto insuficiente',
-    question: '"Banco" é perigoso?',
-    wrongAnswer:
-      '"Banco pode ser perigoso em situações de risco financeiro, mas também pode ser estável dependendo de suas garantias..."',
-    correctAnswer:
-      'Sem contexto, a IA não sabe se você fala de banco financeiro, banco de praça ou banco de dados. A resposta pode ser completamente equivocada.',
-    explanation:
-      'Quando uma pergunta pode ter mais de um significado, a IA fica confusa. Ela escolhe um significado e responde com confiança, mesmo que seja o errado.',
-    color: '#ffaa00',
-  },
-  {
-    id: 4,
-    category: 'Preconceito nos dados',
-    question: 'Quem é melhor para trabalhar com computadores?',
-    wrongAnswer:
-      'Responde dando preferência a um grupo de pessoas, repetindo preconceitos que estavam nas informações com que ela aprendeu.',
-    correctAnswer:
-      'Qualquer pessoa, seja menino ou menina, de qualquer cor ou lugar, pode ser ótima com computadores. A IA às vezes repete preconceitos antigos.',
-    explanation:
-      'Se a IA aprende com informações cheias de preconceito, ela acaba repetindo esse preconceito. Por isso é preciso sempre pensar com a própria cabeça.',
-    color: '#ff3344',
-  },
-  {
-    id: 5,
-    category: 'Fonte inexistente',
-    question: 'Cite um estudo científico sobre o tema X.',
-    wrongAnswer:
-      '"Segundo o estudo de Silva et al. (2021), publicado na Revista Brasileira de Ciências, p. 45-67..."',
-    correctAnswer:
-      'Esse artigo pode não existir. A IA pode inventar autores, títulos, revistas e números de página com aparência completamente realista.',
-    explanation:
-      'Nunca use referências bibliográficas geradas pela IA sem verificar se elas realmente existem. A consequência pode ser um trabalho acadêmico com fontes falsas.',
-    color: '#ff3344',
-  },
-];
+// ─── Pool "A IA acertou ou errou?" ───────────────────────────────────────────
+// Sessão sorteia 5 casos garantindo 2 respostas corretas e 3 erradas,
+// para que o visitante não caia no vício de responder "errou" sempre.
 
-// ─── Casos do jogo "A IA acertou ou errou?" (o visitante julga pelo celular) ───
-// Mistura respostas CERTAS e ERRADAS para o visitante precisar pensar — não basta
-// dizer "errou" sempre.
 export interface AIJudgeCase {
   id: number;
-  question: string;   // o que perguntaram à IA
-  answer: string;     // o que a IA respondeu
-  aiCorrect: boolean; // a IA acertou?
-  tag: string;        // rótulo (tipo de erro, ou "Resposta correta")
+  question: string;
+  answer: string;
+  aiCorrect: boolean;
+  tag: string;
   explanation: string;
   color: string;
 }
 
-export const AI_JUDGE_CASES: AIJudgeCase[] = [
+// Casos em que a IA ERROU
+const AI_WRONG: AIJudgeCase[] = [
   {
     id: 1,
     question: 'Quais livros o autor Joaquim Veraldo escreveu?',
     answer: '"Sombras do Amanhã" (2018) e "O Último Código" (2020), obras muito elogiadas pela crítica.',
     aiCorrect: false,
     tag: 'Alucinação',
-    explanation: 'Esse autor não existe! A IA inventou títulos e datas com cara de verdade. Isso se chama "alucinação".',
+    explanation: 'Esse autor não existe! A IA inventou títulos e datas com cara de verdade. Isso se chama alucinação.',
     color: '#ff3344',
-  },
-  {
-    id: 2,
-    question: 'Qual é a capital do Japão?',
-    answer: 'A capital do Japão é Tóquio.',
-    aiCorrect: true,
-    tag: 'Resposta correta',
-    explanation: 'Fato consolidado e fácil de conferir — aqui a IA acerta. Mesmo assim, no que é importante, sempre confirme.',
-    color: '#00dd44',
   },
   {
     id: 3,
@@ -113,15 +43,6 @@ export const AI_JUDGE_CASES: AIJudgeCase[] = [
     color: '#ff3344',
   },
   {
-    id: 4,
-    question: 'Me dá uma dica para estudar melhor para a prova?',
-    answer: 'Divida a matéria em partes, revise um pouco todo dia e faça resumos com as suas próprias palavras.',
-    aiCorrect: true,
-    tag: 'Resposta correta',
-    explanation: 'Conselho geral e sensato — neste tipo de orientação a IA costuma ajudar bem.',
-    color: '#00dd44',
-  },
-  {
     id: 5,
     question: 'Quem é melhor para trabalhar com computadores?',
     answer: 'Geralmente os meninos se dão melhor com computadores.',
@@ -130,19 +51,111 @@ export const AI_JUDGE_CASES: AIJudgeCase[] = [
     explanation: 'Errado! Qualquer pessoa pode ser ótima com computadores. A IA às vezes repete preconceitos que estavam nos dados de treino.',
     color: '#ffaa00',
   },
+  {
+    id: 7,
+    question: 'Qual é o celular mais barato disponível para comprar hoje?',
+    answer: 'O celular mais acessível disponível hoje é o JioPhone Next, por cerca de R$ 200.',
+    aiCorrect: false,
+    tag: 'Informação desatualizada',
+    explanation: 'Preços e modelos mudam o tempo todo. A IA não sabe o que foi lançado depois do treinamento dela — a resposta pode estar desatualizada.',
+    color: '#ffaa00',
+  },
+  {
+    id: 9,
+    question: 'Qual o telefone de emergência do hospital mais perto de mim?',
+    answer: 'O telefone do hospital mais próximo é (11) 3456-7890, funcionando 24 horas.',
+    aiCorrect: false,
+    tag: 'Alucinação',
+    explanation: 'A IA não sabe onde você está! Ela inventou um número que parece real mas provavelmente não existe. Para informações locais, use o Google Maps.',
+    color: '#ff3344',
+  },
+  {
+    id: 10,
+    question: 'Crie uma referência bibliográfica de um livro sobre fake news para o meu trabalho escolar.',
+    answer: 'SANTOS, Maria Clara. Fake News na Era Digital. São Paulo: Editora Conhecimento, 2022.',
+    aiCorrect: false,
+    tag: 'Fonte inexistente',
+    explanation: 'Esse livro provavelmente não existe. A IA monta referências com aparência perfeita, mas os dados podem ser inventados. Sempre verifique antes de usar no trabalho.',
+    color: '#ff3344',
+  },
 ];
 
-// Leitura do caso e revelação (texto FIXO → pré-gravável). Usados na tela E no gerador.
-export const judgeCasePrompt = (c: AIJudgeCase, i: number): string =>
-  `Caso ${i + 1}. Perguntaram à inteligência artificial: ${c.question} E ela respondeu: ${c.answer}. A IA acertou ou errou?`;
+// Casos em que a IA ACERTOU
+const AI_RIGHT: AIJudgeCase[] = [
+  {
+    id: 2,
+    question: 'Qual é a capital do Japão?',
+    answer: 'A capital do Japão é Tóquio.',
+    aiCorrect: true,
+    tag: 'Resposta correta',
+    explanation: 'Fato consolidado e fácil de conferir — aqui a IA acerta. Mesmo assim, no que é importante, sempre confirme.',
+    color: '#00dd44',
+  },
+  {
+    id: 4,
+    question: 'Me dá uma dica para estudar melhor para a prova.',
+    answer: 'Divida a matéria em partes, revise um pouco todo dia e faça resumos com as suas próprias palavras.',
+    aiCorrect: true,
+    tag: 'Resposta correta',
+    explanation: 'Conselho geral e sensato — neste tipo de orientação a IA costuma ajudar bem.',
+    color: '#00dd44',
+  },
+  {
+    id: 6,
+    question: 'Quanto é 15% de 200?',
+    answer: '15% de 200 é igual a 30.',
+    aiCorrect: true,
+    tag: 'Resposta correta',
+    explanation: 'Cálculo simples e verificável — aqui a IA acertou. Para contas básicas ela vai bem, mas em problemas complexos sempre confira.',
+    color: '#00dd44',
+  },
+  {
+    id: 8,
+    question: 'Você consegue descrever a Torre Eiffel?',
+    answer: 'A Torre Eiffel é uma estrutura de ferro forjado em Paris, construída entre 1887 e 1889 para a Exposição Universal.',
+    aiCorrect: true,
+    tag: 'Resposta correta',
+    explanation: 'Informação histórica bem documentada — a IA acerta bem em fatos amplamente registrados. Para esse tipo de pergunta, ela é confiável.',
+    color: '#00dd44',
+  },
+];
+
+// Pool completo ordenado por id — importado por narration.ts para gerar todos os MPs.
+export const AI_JUDGE_POOL: AIJudgeCase[] = [...AI_WRONG, ...AI_RIGHT].sort((a, b) => a.id - b.id);
+
+// Alias para compatibilidade com código anterior.
+export const AI_JUDGE_CASES = AI_JUDGE_POOL;
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Sorteia 5 casos: sempre 2 corretos + 3 errados — o visitante não pode chutar
+// "errou" em todos e acertar; precisa realmente pensar.
+export function pickAIJudgeCases(n = 5): AIJudgeCase[] {
+  const nRight = Math.min(2, AI_RIGHT.length);
+  const nWrong = Math.min(n - nRight, AI_WRONG.length);
+  return shuffle([...shuffle(AI_RIGHT).slice(0, nRight), ...shuffle(AI_WRONG).slice(0, nWrong)]);
+}
+
+// Texto lido pelo narrador (sem número de caso — posição varia por sessão).
+export const judgeCasePrompt = (c: AIJudgeCase): string =>
+  `Perguntaram à inteligência artificial: ${c.question} E ela respondeu: ${c.answer}. A IA acertou ou errou?`;
+
 export const judgeRevealLine = (c: AIJudgeCase): string =>
   `A IA ${c.aiCorrect ? 'acertou' : 'errou'}. ${c.explanation}`;
 
-// ─── Narração fixa (pré-gravável em MP3) ───────────────────────────────────────
+// ─── Narração fixa da fase ────────────────────────────────────────────────────
 export const AIERR_INTRO =
-  'Você sabia que a inteligência artificial pode errar? Vou te mostrar alguns tipos de erro que ela comete. Preste atenção em cada um.';
+  'Você sabia que a inteligência artificial pode errar? Vou te mostrar situações reais. Em cada uma, você vai dizer se a IA acertou ou errou a resposta. Atenção!';
 export const AIERR_CLOSING =
-  'Viu só? A IA ajuda muito, mas não substitui o pensamento humano. Sempre verifique, compare e reflita. Quando estiver pronto, toque em continuar.';
+  'Viu só? A IA ajuda muito, mas não substitui o pensamento humano. Sempre verifique, compare e reflita. Continue pelo celular.';
 
-export const aiErrLine = (ex: AIErrorExample): string =>
-  `${ex.category}. Imagine perguntar à inteligência artificial: ${ex.question} Ela pode responder com muita confiança, mas errado, como você vê aí na tela. O certo é: ${ex.correctAnswer} Isso acontece porque ${ex.explanation}`;
+// Legado — não mais usado nas telas novas.
+export const AI_ERROR_EXAMPLES: AIErrorExample[] = [];
+export const aiErrLine = (_ex: AIErrorExample): string => '';

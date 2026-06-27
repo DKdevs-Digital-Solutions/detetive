@@ -1,5 +1,5 @@
-import { AI_JUDGE_CASES, judgeCasePrompt, judgeRevealLine, AIERR_INTRO } from './aiErrors';
-import { NEWS_LESSONS, newsCasePrompt } from './news';
+import { AI_JUDGE_POOL, judgeCasePrompt, judgeRevealLine, AIERR_INTRO } from './aiErrors';
+import { NEWS_POOL, newsCasePrompt } from './news';
 import { CHECKLIST_ITEMS, CHECKLIST_INTRO, CHECKLIST_CLOSING } from './checklist';
 import { QUIZ_QUESTIONS } from './quiz';
 
@@ -32,22 +32,25 @@ export interface Clip {
  * por `scripts/gen-audio.mjs` e tocados de `public/audio/<id>.mp3`, evitando o
  * custo da ElevenLabs ao vivo. A voz neural ao vivo fica SÓ para as respostas
  * dinâmicas da conversa livre.
+ *
+ * IDs usam o `id` estável do item do pool — não o índice da sessão — para que
+ * o MP3 correto seja tocado independentemente de qual subconjunto foi sorteado.
  */
 export const CLIPS: Clip[] = [
   ...PRAISE.map((text, i) => ({ id: `praise-${i}`, text })),
   { id: 'fb-right', text: FB_RIGHT },
   { id: 'fb-wrong', text: FB_WRONG },
 
-  // Investigue a notícia (interativo): leitura do caso + revelação (explicação).
-  ...NEWS_LESSONS.map((l, i) => ({ id: `news-case-${i}`, text: newsCasePrompt(l, i) })),
-  ...NEWS_LESSONS.map((l, i) => ({ id: `news-${i}`, text: l.speech })),
-
-  // A IA acertou ou errou? (interativo): intro + leitura do caso + revelação.
+  // A IA acertou ou errou? — intro + leitura de cada caso + revelação.
   { id: 'aierr-intro', text: AIERR_INTRO },
-  ...AI_JUDGE_CASES.map((c, i) => ({ id: `judge-case-${i}`, text: judgeCasePrompt(c, i) })),
-  ...AI_JUDGE_CASES.map((c, i) => ({ id: `judge-reveal-${i}`, text: judgeRevealLine(c) })),
+  ...AI_JUDGE_POOL.map((c) => ({ id: `judge-case-${c.id}`, text: judgeCasePrompt(c) })),
+  ...AI_JUDGE_POOL.map((c) => ({ id: `judge-reveal-${c.id}`, text: judgeRevealLine(c) })),
 
-  // Prova de detetive (quiz): pergunta + explicação, por id estável da pergunta.
+  // Investigue a notícia — leitura do caso + explicação após veredito.
+  ...NEWS_POOL.map((l) => ({ id: `news-case-${l.id}`, text: newsCasePrompt(l) })),
+  ...NEWS_POOL.map((l) => ({ id: `news-${l.id}`, text: l.speech })),
+
+  // Prova de detetive (quiz) — pergunta + explicação, por id estável.
   ...QUIZ_QUESTIONS.map((q) => ({ id: `quiz-q-${q.id}`, text: q.question })),
   ...QUIZ_QUESTIONS.map((q) => ({ id: `quiz-exp-${q.id}`, text: q.explanation })),
 

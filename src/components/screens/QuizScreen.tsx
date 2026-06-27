@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Screen, QuizQuestion } from '@/types';
-import { QUIZ_QUESTIONS } from '@/data/quiz';
+import { pickQuizQuestions } from '@/data/quiz';
 import { FB_RIGHT, FB_WRONG } from '@/data/narration';
 import { useGame } from '@/context/GameProvider';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
@@ -15,36 +15,13 @@ interface QuizScreenProps {
 
 type QuizState = 'intro' | 'question' | 'analyzing' | 'result';
 
-// Embaralhamento Fisher-Yates (cópia — não muta o original).
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-// Monta o baralho da sessão: ordem das perguntas E ordem das alternativas
-// embaralhadas, com o índice da resposta correta remapeado. Evita o vício de
-// "a resposta é quase sempre a letra B".
-function buildDeck(): QuizQuestion[] {
-  return shuffle(QUIZ_QUESTIONS).map((q) => {
-    const tagged = q.options.map((text, i) => ({ text, correct: i === q.correct }));
-    const mixed = shuffle(tagged);
-    return {
-      ...q,
-      options: mixed.map((o) => o.text),
-      correct: mixed.findIndex((o) => o.correct),
-    };
-  });
-}
+// Sorteia 5 perguntas do pool de 20, com opções embaralhadas.
 
 export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps) {
   const { grantBadge } = useGame();
   const { playClip, stop: stopSpeaking } = useElevenLabsSpeech();
   const playRef = useRef(playClip);
-  const [deck, setDeck] = useState<QuizQuestion[]>(() => buildDeck());
+  const [deck, setDeck] = useState<QuizQuestion[]>(() => pickQuizQuestions(5));
   const [state, setState] = useState<QuizState>('intro');
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
@@ -62,17 +39,15 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
   // Ref estável para auto-avançar sem closure velha.
   const handleNextRef = useRef(() => {});
 
-  // O Detetive lê a PERGUNTA (áudio pré-gravado); as opções aparecem na tela do
-  // totem (a ordem é embaralhada por sessão, então não dá para pré-gravar). Só
-  // libera as respostas ao terminar de ler.
+  // O Detetive lê a PERGUNTA (clip com id estável); as opções aparecem na tela.
+  // Só libera as respostas ao terminar de ler.
   useEffect(() => {
-    if (state === 'question' && question && spokenQRef.current !== currentQ) {
-      spokenQRef.current = currentQ;
+    if (state === 'question' && question && spokenQRef.current !== question.id) {
+      spokenQRef.current = question.id;
       setCanAnswer(false);
       let unlocked = false;
       const unlock = () => { if (!unlocked) { unlocked = true; setCanAnswer(true); } };
       playRef.current(`quiz-q-${question.id}`, question.question, unlock);
-      // Segurança: libera mesmo se o áudio falhar ou não terminar.
       const safety = setTimeout(unlock, 15000);
       return () => clearTimeout(safety);
     }
@@ -137,7 +112,7 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
     stopSpeaking();
     spokenQRef.current = -1;
     setCanAnswer(false);
-    setDeck(buildDeck()); // nova ordem de perguntas e respostas
+    setDeck(pickQuizQuestions(5)); // novo sorteio de 5 perguntas
     setState('intro');
     setCurrentQ(0);
     setSelected(null);
@@ -211,7 +186,7 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
         </button>
         <div>
           <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Quiz Interativo</h2>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>10 perguntas sobre IA e fake news</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>5 perguntas sortidas de um banco de 20</p>
         </div>
 
         {state === 'question' && (
@@ -249,12 +224,12 @@ export default function QuizScreen({ onNavigate, controlCode }: QuizScreenProps)
             <div>
               <h3 className="text-2xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>Quiz Detetive IA</h3>
               <p className="text-sm leading-relaxed max-w-md" style={{ color: 'var(--text-secondary)' }}>
-                Teste seus conhecimentos sobre inteligência artificial, fake news e uso responsável da tecnologia. São 10 perguntas com explicações educativas!
+                Teste seus conhecimentos sobre inteligência artificial e fake news. São 5 perguntas — cada sessão sorteia perguntas diferentes!
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-4 w-full max-w-sm">
-              {[['10', 'Perguntas'], ['3', 'Opções cada'], ['100%', 'Educativo']].map(([val, label]) => (
+              {[['5', 'Perguntas'], ['3', 'Opções cada'], ['100%', 'Educativo']].map(([val, label]) => (
                 <div key={label} className="glass-card p-3 text-center">
                   <p className="text-xl font-bold" style={{ color: '#00d4ff' }}>{val}</p>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>

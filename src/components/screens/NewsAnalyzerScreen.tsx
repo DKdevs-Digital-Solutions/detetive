@@ -6,7 +6,7 @@ import { Screen, ConfidenceLevel } from '@/types';
 import TrafficLight from '@/components/ui/TrafficLight';
 import Avatar from '@/components/ui/Avatar';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
-import { NEWS_LESSONS, newsCasePrompt } from '@/data/news';
+import { pickNewsCases, newsCasePrompt } from '@/data/news';
 import { FB_RIGHT, FB_WRONG } from '@/data/narration';
 
 interface NewsAnalyzerScreenProps {
@@ -24,35 +24,36 @@ const LEVELS: { level: ConfidenceLevel; label: string; emoji: string; color: str
 export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnalyzerScreenProps) {
   const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
-  const total = NEWS_LESSONS.length;
+  // Sorteia 1 caso de cada nível ao montar — estável durante toda a sessão.
+  const [session] = useState(() => pickNewsCases(3));
+  const total = session.length;
   const [caseIndex, setCaseIndex] = useState(0);
   const [canVote, setCanVote] = useState(false);
   const [selected, setSelected] = useState<ConfidenceLevel | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [done, setDone] = useState(false);
 
-  const current = NEWS_LESSONS[caseIndex];
+  const current = session[caseIndex];
   const isCorrect = revealed && selected === current.level;
 
   const playRef = useRef(playClip);
   useEffect(() => { playRef.current = playClip; }, [playClip]);
-  const spokenRef = useRef(-1);
+  const spokenRef = useRef(-1); // armazena o id estável do caso já narrado
 
-  // Lê o caso atual (áudio pré-gravado); libera o voto ao terminar de ler.
+  // Lê o caso (clip com id estável do pool); libera o voto ao terminar.
   useEffect(() => {
     if (done) return;
-    if (spokenRef.current === caseIndex) return;
-    spokenRef.current = caseIndex;
+    if (spokenRef.current === current.id) return;
+    spokenRef.current = current.id;
     setSelected(null);
     setRevealed(false);
     setCanVote(false);
-    const c = NEWS_LESSONS[caseIndex];
     let unlocked = false;
     const unlock = () => { if (!unlocked) { unlocked = true; setCanVote(true); } };
-    playRef.current(`news-case-${caseIndex}`, newsCasePrompt(c, caseIndex), unlock);
+    playRef.current(`news-case-${current.id}`, newsCasePrompt(current), unlock);
     const safety = setTimeout(unlock, 14000);
     return () => clearTimeout(safety);
-  }, [caseIndex, done]);
+  }, [caseIndex, done, current]);
 
   // Para a fala ao sair da fase.
   useEffect(() => () => { stopSpeaking(); }, [stopSpeaking]);
@@ -68,11 +69,13 @@ export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnal
     setRevealed(true);
     stopSpeaking();
     const acerto = level === current.level;
+    const caseId = current.id;
+    const speech = current.speech;
     const idx = caseIndex;
     const t = total;
     // Feedback → explicação → auto-avança para o próximo caso.
     playRef.current(acerto ? 'fb-right' : 'fb-wrong', acerto ? FB_RIGHT : FB_WRONG, () => {
-      playRef.current(`news-${idx}`, NEWS_LESSONS[idx].speech, () => {
+      playRef.current(`news-${caseId}`, speech, () => {
         setTimeout(() => {
           if (idx < t - 1) setCaseIndex((i) => i + 1);
           else { stopSpeaking(); setDone(true); }

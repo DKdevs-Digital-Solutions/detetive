@@ -489,7 +489,7 @@ function QuizControl({ quiz, send, displayReady }: { quiz: QuizInfo | null; send
       <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
         <p className="text-base font-bold mb-1" style={{ color: '#00d4ff' }}>Quiz Detetive IA</p>
         <p className="text-sm mb-4" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>
-          10 perguntas. O Detetive lê cada uma no totem e você responde aqui.
+          5 perguntas sortidas. O Detetive lê cada uma no totem e você responde aqui.
         </p>
         <BigButton onClick={() => send({ type: 'quiz-start' })} glow>Iniciar Quiz</BigButton>
       </div>
