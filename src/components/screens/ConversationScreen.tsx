@@ -19,11 +19,11 @@ const MAX_QUESTIONS = 3;
 const IDLE_MS = 22_000; // sem pergunta por esse tempo → segue para o certificado
 
 const GREETING =
-  'Boa! Chegamos à última fase. Agora você pode me perguntar até três coisas sobre inteligência artificial ou fake news. Pode falar a sua primeira pergunta.';
+  'Última missão, detetive! Agora é a sua vez de interrogar a inteligência artificial. Faça até três perguntas sobre IA ou fake news. Pode mandar a primeira.';
 const CLOSING =
-  'Foi ótimo investigar com você! Vou te levar para o seu certificado.';
+  'Caso encerrado, detetive! Foi uma honra investigar com você. Vou preparar o seu certificado.';
 const TIMEOUT_LINE =
-  'Sem perguntas por enquanto? Sem problema. Vamos para o seu certificado!';
+  'Sem mais perguntas, detetive? Então vamos direto ao seu certificado!';
 
 export default function ConversationScreen({ onAdvance, isOnline }: Props) {
   const { grantBadge } = useGame();

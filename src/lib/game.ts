@@ -29,11 +29,11 @@ export function emptyBadges(): Record<BadgeId, boolean> {
 export const JOURNEY: Screen[] = ['ai-errors', 'news', 'checklist', 'quiz', 'assistant'];
 
 export const PHASE_LABELS: Record<string, string> = {
-  'ai-errors': 'A IA pode errar?',
-  news: 'Analisar uma notícia',
-  checklist: 'Checklist anti-fake news',
-  quiz: 'Quiz',
-  assistant: 'Converse com o Detetive',
+  'ai-errors': 'Pegue o erro da IA',
+  news: 'Investigue a notícia',
+  checklist: 'Checklist do detetive',
+  quiz: 'Prova de detetive',
+  assistant: 'Interrogue a IA',
 };
 
 export function journeyIndex(screen: Screen): number {

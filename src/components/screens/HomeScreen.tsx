@@ -122,7 +122,7 @@ export default function HomeScreen({ isOnline, controlUrl, controllerConnected }
           DETETIVE <span style={{ color: '#fff' }}>IA</span>
         </motion.h1>
         <p className="text-base sm:text-lg font-medium" style={{ color: 'var(--text-secondary)' }}>
-          Tecnologia para investigar o que é real.
+          Você é o detetive da informação. Investigue o que é real.
         </p>
       </motion.div>
 

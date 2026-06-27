@@ -36,6 +36,28 @@ interface QuizInfo {
   pct: number;
 }
 
+type NewsLevel = 'green' | 'yellow' | 'red';
+
+interface NewsInfo {
+  caseIndex: number;
+  total: number;
+  canVote: boolean;
+  selected: NewsLevel | null;
+  revealed: boolean;
+  correctLevel: NewsLevel | null;
+  done: boolean;
+}
+
+interface AIErrInfo {
+  caseIndex: number;
+  total: number;
+  canVote: boolean;
+  selected: boolean | null;
+  revealed: boolean;
+  aiCorrect: boolean | null;
+  done: boolean;
+}
+
 export default function ControlPage() {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState<Status>('loading');
@@ -53,6 +75,12 @@ export default function ControlPage() {
 
   // Quiz: espelho do estado do totem (o quiz é respondido aqui no celular).
   const [quiz, setQuiz] = useState<QuizInfo | null>(null);
+
+  // Notícias: o visitante dá o veredito pelo celular.
+  const [news, setNews] = useState<NewsInfo | null>(null);
+
+  // "A IA acertou ou errou?": julgamento pelo celular.
+  const [aierr, setAierr] = useState<AIErrInfo | null>(null);
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -132,6 +160,8 @@ export default function ControlPage() {
             setPhotoState('idle'); setPhotoSkipped(false);
           }
           if (cmd.screen !== 'quiz') setQuiz(null);
+          if (cmd.screen !== 'news') setNews(null);
+          if (cmd.screen !== 'ai-errors') setAierr(null);
         } else if (cmd?.from === 'display' && cmd.type === 'badge' && cmd.badge) {
           setCelebration(cmd.badge);
           setBadges((prev) => (prev.includes(cmd.badge) ? prev : [...prev, cmd.badge]));
@@ -139,6 +169,10 @@ export default function ControlPage() {
           setPhotoState(cmd.photoState);
         } else if (cmd?.from === 'display' && cmd.type === 'quiz-state' && cmd.quiz) {
           setQuiz(cmd.quiz);
+        } else if (cmd?.from === 'display' && cmd.type === 'news-state' && cmd.news) {
+          setNews(cmd.news);
+        } else if (cmd?.from === 'display' && cmd.type === 'aierr-state' && cmd.aierr) {
+          setAierr(cmd.aierr);
         }
       } catch { /* ignore */ }
     };
@@ -337,7 +371,15 @@ export default function ControlPage() {
                     <QuizControl quiz={quiz} send={send} displayReady={displayReady} />
                   )}
 
-                  {isPhase && displayScreen !== 'quiz' && (
+                  {isPhase && displayScreen === 'news' && (
+                    <NewsControl news={news} send={send} displayReady={displayReady} />
+                  )}
+
+                  {isPhase && displayScreen === 'ai-errors' && (
+                    <AIErrControl aierr={aierr} send={send} displayReady={displayReady} />
+                  )}
+
+                  {isPhase && displayScreen !== 'quiz' && displayScreen !== 'news' && displayScreen !== 'ai-errors' && (
                     <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
                       <p className="text-sm mb-3" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>
                         {displayReady
@@ -529,6 +571,138 @@ function QuizControl({ quiz, send, displayReady }: { quiz: QuizInfo | null; send
           <div className="h-4" />
           <BigButton onClick={() => send({ type: 'quiz-next' })} glow>
             {quiz.index < quiz.total - 1 ? 'Próxima pergunta' : 'Ver resultado'}
+          </BigButton>
+        </>
+      )}
+    </div>
+  );
+}
+
+const NEWS_LEVELS: { level: NewsLevel; label: string; emoji: string; color: string }[] = [
+  { level: 'green', label: 'Confiável', emoji: '🟢', color: '#00dd44' },
+  { level: 'yellow', label: 'Atenção', emoji: '🟡', color: '#ffaa00' },
+  { level: 'red', label: 'Suspeita', emoji: '🔴', color: '#ff3344' },
+];
+
+function NewsControl({ news, send, displayReady }: { news: NewsInfo | null; send: (c: Record<string, unknown>) => void; displayReady: boolean }) {
+  if (!news || news.done) {
+    return (
+      <div className="rounded-2xl p-4 text-center" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+        <p className="text-base font-bold mb-1" style={{ color: '#00d4ff' }}>Casos resolvidos! 🕵️</p>
+        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>Bom faro, detetive. Siga para a próxima fase.</p>
+        <BigButton onClick={() => send({ type: 'advance' })} disabled={!displayReady} glow={displayReady}>
+          Continuar
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </BigButton>
+      </div>
+    );
+  }
+
+  const correct = news.revealed && news.selected === news.correctLevel;
+  return (
+    <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+      <p className="text-[11px] uppercase tracking-[0.18em] mb-1" style={{ color: 'rgba(0,212,255,0.7)' }}>
+        Caso {news.caseIndex + 1} de {news.total}
+      </p>
+      <p className="text-sm mb-4 font-semibold" style={{ color: news.revealed ? (correct ? '#00dd44' : '#ffaa00') : '#00d4ff' }}>
+        {news.revealed
+          ? (correct ? 'Veredito certo! 🎉' : 'Quase! Veja as pistas no totem.')
+          : (news.canVote ? 'Leia no totem e dê o seu veredito:' : 'O Detetive está lendo o caso...')}
+      </p>
+
+      <div className="grid grid-cols-3 gap-3">
+        {NEWS_LEVELS.map((l) => {
+          const isPicked = news.selected === l.level;
+          const isAnswer = news.revealed && news.correctLevel === l.level;
+          const disabled = !news.canVote || news.revealed;
+          let border = `${l.color}66`;
+          let bg = 'rgba(0,30,60,0.6)';
+          if (isAnswer) { border = l.color; bg = `${l.color}28`; }
+          else if (isPicked && !isAnswer) { border = '#ff3344'; bg = 'rgba(255,51,68,0.18)'; }
+          return (
+            <button
+              key={l.level}
+              onClick={disabled ? undefined : () => send({ type: 'news-vote', level: l.level })}
+              className="rounded-2xl py-4 flex flex-col items-center gap-1"
+              style={{ background: bg, border: `2px solid ${border}`, opacity: disabled && !isAnswer && !isPicked ? 0.5 : 1 }}
+            >
+              <span style={{ fontSize: 'clamp(26px, 9vw, 40px)' }}>{l.emoji}</span>
+              <span className="text-xs font-bold" style={{ color: l.color }}>{l.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {news.revealed && (
+        <>
+          <div className="h-4" />
+          <BigButton onClick={() => send({ type: 'news-next' })} glow>
+            {news.caseIndex < news.total - 1 ? 'Próximo caso' : 'Concluir'}
+          </BigButton>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AIErrControl({ aierr, send, displayReady }: { aierr: AIErrInfo | null; send: (c: Record<string, unknown>) => void; displayReady: boolean }) {
+  if (!aierr || aierr.done) {
+    return (
+      <div className="rounded-2xl p-4 text-center" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+        <p className="text-base font-bold mb-1" style={{ color: '#00d4ff' }}>Investigação concluída! 🤖</p>
+        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary, #9fb6cc)' }}>Você aprendeu a desconfiar das respostas da IA. Siga em frente.</p>
+        <BigButton onClick={() => send({ type: 'advance' })} disabled={!displayReady} glow={displayReady}>
+          Continuar
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </BigButton>
+      </div>
+    );
+  }
+
+  const correct = aierr.revealed && aierr.selected === aierr.aiCorrect;
+  const opts: { value: boolean; label: string; emoji: string; color: string }[] = [
+    { value: true, label: 'Acertou', emoji: '✅', color: '#00dd44' },
+    { value: false, label: 'Errou', emoji: '❌', color: '#ff3344' },
+  ];
+  return (
+    <div className="rounded-2xl p-4" style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.15)' }}>
+      <p className="text-[11px] uppercase tracking-[0.18em] mb-1" style={{ color: 'rgba(0,212,255,0.7)' }}>
+        Caso {aierr.caseIndex + 1} de {aierr.total}
+      </p>
+      <p className="text-sm mb-4 font-semibold" style={{ color: aierr.revealed ? (correct ? '#00dd44' : '#ffaa00') : '#00d4ff' }}>
+        {aierr.revealed
+          ? (correct ? 'Veredito certo! 🎉' : 'Quase! Veja a explicação no totem.')
+          : (aierr.canVote ? 'Leia a resposta no totem. A IA acertou?' : 'O Detetive está lendo o caso...')}
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        {opts.map((o) => {
+          const isPicked = aierr.selected === o.value;
+          const isAnswer = aierr.revealed && aierr.aiCorrect === o.value;
+          const disabled = !aierr.canVote || aierr.revealed;
+          let border = `${o.color}66`;
+          let bg = 'rgba(0,30,60,0.6)';
+          if (isAnswer) { border = o.color; bg = `${o.color}28`; }
+          else if (isPicked && !isAnswer) { border = '#ff3344'; bg = 'rgba(255,51,68,0.18)'; }
+          return (
+            <button
+              key={String(o.value)}
+              onClick={disabled ? undefined : () => send({ type: 'aierr-vote', value: o.value })}
+              className="rounded-2xl py-4 flex flex-col items-center gap-1"
+              style={{ background: bg, border: `2px solid ${border}`, opacity: disabled && !isAnswer && !isPicked ? 0.5 : 1 }}
+            >
+              <span style={{ fontSize: 'clamp(26px, 9vw, 40px)' }}>{o.emoji}</span>
+              <span className="text-sm font-bold" style={{ color: o.color }}>{o.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {aierr.revealed && (
+        <>
+          <div className="h-4" />
+          <BigButton onClick={() => send({ type: 'aierr-next' })} glow>
+            {aierr.caseIndex < aierr.total - 1 ? 'Próximo caso' : 'Concluir'}
           </BigButton>
         </>
       )}

@@ -5,9 +5,9 @@ export interface ChecklistItem {
 }
 
 export const CHECKLIST_INTRO =
-  'Vou te ensinar a desconfiar de notícias falsas. Preste atenção em cada ponto que eu vou marcar.';
+  'Todo bom detetive tem um checklist, e este é o seu. São os pontos que você deve verificar em qualquer notícia. Preste atenção em cada um.';
 export const CHECKLIST_CLOSING =
-  'Pronto! Quanto mais respostas sim, mais confiável é a notícia. Na dúvida, não compartilhe.';
+  'Pronto, detetive! Quanto mais respostas sim, mais confiável é a notícia. Na dúvida, não compartilhe. Quando estiver pronto, continue pelo seu celular.';
 
 export const CHECKLIST_ITEMS: ChecklistItem[] = [
   { id: 1, question: 'Quem publicou essa informação?', detail: 'A fonte é um veículo conhecido, instituto de pesquisa ou órgão oficial?' },

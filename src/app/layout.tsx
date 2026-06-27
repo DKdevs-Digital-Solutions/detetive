@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Detetive IA — Totem Interativo',
-  description: 'Tecnologia para investigar o que é real. Aprenda sobre IA, fake news e uso responsável da tecnologia.',
+  description: 'Vire detetive da informação: investigue notícias, pegue os erros da IA e descubra o que é real.',
   robots: 'noindex',
 };
 

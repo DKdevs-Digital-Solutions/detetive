@@ -206,7 +206,7 @@ function AppShell() {
 
   // ─── Controle remoto (celular do visitante, código por sessão lido via QR) ────
   // O controlador (/controle?code=...) acompanha a jornada e envia ações sequenciais.
-  const handleControl = useCallback((cmd: { type?: string; screen?: Screen; channel?: string; name?: string; idx?: number }) => {
+  const handleControl = useCallback((cmd: { type?: string; screen?: Screen; channel?: string; name?: string; idx?: number; level?: string; value?: boolean }) => {
     window.dispatchEvent(new Event('detetive:keepalive'));
     if (cmd.type === 'start') {
       startJourney();
@@ -227,6 +227,12 @@ function AppShell() {
     } else if (cmd.type && cmd.type.startsWith('quiz-')) {
       // Quiz respondido pelo celular: encaminha a ação para a tela do quiz.
       window.dispatchEvent(new CustomEvent('detetive:quiz', { detail: { action: cmd.type.slice(5), idx: cmd.idx } }));
+    } else if (cmd.type && cmd.type.startsWith('news-')) {
+      // Investigação de notícias votada pelo celular.
+      window.dispatchEvent(new CustomEvent('detetive:news', { detail: { action: cmd.type.slice(5), level: cmd.level } }));
+    } else if (cmd.type && cmd.type.startsWith('aierr-')) {
+      // "A IA acertou ou errou?" julgado pelo celular.
+      window.dispatchEvent(new CustomEvent('detetive:aierr', { detail: { action: cmd.type.slice(6), value: cmd.value } }));
     } else if (cmd.type === 'hello') {
       setControllerConnected(true); // celular pareou → some o QR do totem
       fetch('/api/control/send', {
@@ -275,13 +281,13 @@ function AppShell() {
       case 'assistant':
         return <ConversationScreen onAdvance={() => advanceFrom('assistant')} isOnline={isOnline} />;
       case 'news':
-        return <NewsAnalyzerScreen onNavigate={navigate} isOnline={isOnline} />;
+        return <NewsAnalyzerScreen onNavigate={navigate} isOnline={isOnline} controlCode={sessionCode} />;
       case 'quiz':
         return <QuizScreen onNavigate={navigate} controlCode={sessionCode} />;
       case 'checklist':
         return <ChecklistScreen onNavigate={navigate} />;
       case 'ai-errors':
-        return <AIErrorsScreen onNavigate={navigate} />;
+        return <AIErrorsScreen onNavigate={navigate} controlCode={sessionCode} />;
       case 'certificate':
         return <CertificateScreen onNavigate={navigate} onComplete={restartSession} controlCode={sessionCode} />;
       case 'admin':

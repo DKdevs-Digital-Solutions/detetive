@@ -3,100 +3,104 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Screen } from '@/types';
-import { AI_ERROR_EXAMPLES, AIERR_INTRO, AIERR_CLOSING, aiErrLine } from '@/data/aiErrors';
-import { useGame } from '@/context/GameProvider';
+import { AI_JUDGE_CASES } from '@/data/aiErrors';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
 import Avatar from '@/components/ui/Avatar';
 
 interface AIErrorsScreenProps {
   onNavigate: (screen: Screen) => void;
+  controlCode: string; // o veredito é dado no celular
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  Alucinação: '👻',
-  'Informação desatualizada': '🕰️',
-  'Contexto insuficiente': '❓',
-  'Preconceito nos dados': '⚖️',
-  'Fonte inexistente': '📭',
-};
+export default function AIErrorsScreen({ onNavigate, controlCode }: AIErrorsScreenProps) {
+  const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
-export default function AIErrorsScreen({ onNavigate }: AIErrorsScreenProps) {
-  const { grantBadge } = useGame();
-  const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
-
-  const [opened, setOpened] = useState<Set<number>>(new Set());
-  const [playing, setPlaying] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(-1);
+  const total = AI_JUDGE_CASES.length;
+  const [caseIndex, setCaseIndex] = useState(0);
+  const [canVote, setCanVote] = useState(false);
+  const [selected, setSelected] = useState<boolean | null>(null); // true = "acertou", false = "errou"
+  const [revealed, setRevealed] = useState(false);
   const [done, setDone] = useState(false);
 
-  const playingRef = useRef(false);
-  const runIdRef = useRef(0);
-  const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const playClipRef = useRef(playClip);
-  useEffect(() => { playClipRef.current = playClip; }, [playClip]);
+  const current = AI_JUDGE_CASES[caseIndex];
+  const isCorrect = revealed && selected === current.aiCorrect;
 
-  const speakAndWait = (id: string, text: string, runId: number) =>
-    new Promise<void>((resolve) => {
-      if (!playingRef.current || runId !== runIdRef.current) { resolve(); return; }
-      let completed = false;
-      const finish = () => { if (completed) return; completed = true; resolve(); };
-      playClipRef.current(id, text, finish);
-    });
+  const speakRef = useRef(speak);
+  useEffect(() => { speakRef.current = speak; }, [speak]);
+  const spokenRef = useRef(-1);
 
-  const startNarration = async () => {
-    const runId = runIdRef.current + 1;
-    runIdRef.current = runId;
-    playingRef.current = true;
-    setPlaying(true);
-    setDone(false);
-    setOpened(new Set());
-    setCurrentIndex(-1);
-    stopSpeaking();
-    grantBadge('ai-errors'); // selo da jornada (o Detetive está conduzindo)
+  // Lê o caso (pergunta + resposta da IA); libera o voto ao terminar.
+  useEffect(() => {
+    if (done) return;
+    if (spokenRef.current === caseIndex) return;
+    spokenRef.current = caseIndex;
+    setSelected(null);
+    setRevealed(false);
+    setCanVote(false);
+    const c = AI_JUDGE_CASES[caseIndex];
+    let unlocked = false;
+    const unlock = () => { if (!unlocked) { unlocked = true; setCanVote(true); } };
+    speakRef.current(`Caso ${caseIndex + 1}. Perguntaram à inteligência artificial: ${c.question} E ela respondeu: ${c.answer}. A IA acertou ou errou?`, unlock);
+    const safety = setTimeout(unlock, 16000);
+    return () => clearTimeout(safety);
+  }, [caseIndex, done]);
 
-    await speakAndWait('aierr-intro', AIERR_INTRO, runId);
-    if (!playingRef.current || runId !== runIdRef.current) return;
+  useEffect(() => () => { stopSpeaking(); }, [stopSpeaking]);
 
-    for (let i = 0; i < AI_ERROR_EXAMPLES.length; i += 1) {
-      if (!playingRef.current || runId !== runIdRef.current) return;
-      const ex = AI_ERROR_EXAMPLES[i];
-      setCurrentIndex(i);
-      // Mantém os cartões já abertos abertos (a tela é grande e ajuda a ler).
-      setOpened((prev) => { const next = new Set(prev); next.add(ex.id); return next; });
-      cardRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await speakAndWait(`aierr-${i}`, aiErrLine(ex), runId);
-      if (!playingRef.current || runId !== runIdRef.current) return;
-      // Pausa generosa para dar tempo de LER o exemplo na tela antes de trocar de cartão.
-      const readMs = Math.min(7000, Math.max(4000, ex.wrongAnswer.length * 50));
-      await new Promise<void>((r) => setTimeout(r, readMs));
-    }
-
-    if (!playingRef.current || runId !== runIdRef.current) return;
-    setCurrentIndex(-1);
-    await speakAndWait('aierr-closing', AIERR_CLOSING, runId);
-
-    if (!playingRef.current || runId !== runIdRef.current) return;
-    playingRef.current = false;
-    setPlaying(false);
-    setDone(true);
-  };
-
-  // Avisa o controle remoto: só libera "Continuar" quando a explicação termina.
+  // Avisa o controle: só libera "Continuar" quando todos os casos forem julgados.
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('detetive:phase-ready', { detail: { ready: done } }));
   }, [done]);
 
-  // Inicia a narração ao abrir a fase.
+  const handleVote = (verdict: boolean) => {
+    if (!canVote || selected !== null || done) return;
+    setSelected(verdict);
+    setRevealed(true);
+    stopSpeaking();
+    const acerto = verdict === current.aiCorrect;
+    speakRef.current(`${acerto ? 'Isso, detetive!' : 'Olha de novo!'} A IA ${current.aiCorrect ? 'acertou' : 'errou'}. ${current.explanation}`);
+  };
+
+  const handleNext = () => {
+    if (!revealed) return;
+    if (caseIndex < total - 1) setCaseIndex((i) => i + 1);
+    else { stopSpeaking(); setDone(true); }
+  };
+
+  // Espelha o estado para o celular (quem julga).
   useEffect(() => {
-    startTimerRef.current = setTimeout(() => { void startNarration(); }, 700);
-    return () => {
-      if (startTimerRef.current) clearTimeout(startTimerRef.current);
-      runIdRef.current += 1;
-      playingRef.current = false;
-      stopSpeaking();
+    if (!controlCode) return;
+    const payload = {
+      caseIndex,
+      total,
+      canVote,
+      selected,
+      revealed,
+      aiCorrect: revealed ? current.aiCorrect : null,
+      done,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetch('/api/control/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: controlCode, command: { from: 'display', type: 'aierr-state', aierr: payload } }),
+    }).catch(() => {});
+  }, [controlCode, caseIndex, total, canVote, selected, revealed, done, current.aiCorrect]);
+
+  // Recebe as ações do celular (julgar, próximo caso).
+  const actionsRef = useRef<(a: string, value?: boolean) => void>(() => {});
+  useEffect(() => {
+    actionsRef.current = (action: string, value?: boolean) => {
+      if (action === 'vote' && typeof value === 'boolean') handleVote(value);
+      else if (action === 'next') handleNext();
+    };
+  });
+  useEffect(() => {
+    const onAierr = (e: Event) => {
+      const d = (e as CustomEvent<{ action?: string; value?: boolean }>).detail || {};
+      actionsRef.current(d.action || '', d.value);
+    };
+    window.addEventListener('detetive:aierr', onAierr);
+    return () => window.removeEventListener('detetive:aierr', onAierr);
   }, []);
 
   return (
@@ -108,121 +112,104 @@ export default function AIErrorsScreen({ onNavigate }: AIErrorsScreenProps) {
             <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <div>
-          <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>A IA Pode Errar?</h2>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>O Detetive explica cada tipo de erro</p>
+        <div className="flex-1">
+          <h2 className="text-base lg:text-xl font-bold" style={{ color: 'var(--text-primary)' }}>A IA acertou ou errou?</h2>
+          <p className="text-xs lg:text-sm" style={{ color: 'var(--text-muted)' }}>Você é o detetive — julgue a resposta da IA pelo celular</p>
         </div>
+        {!done && (
+          <span className="text-sm lg:text-base font-mono" style={{ color: '#00d4ff' }}>Caso {caseIndex + 1}/{total}</span>
+        )}
       </div>
 
       {/* Barra do narrador */}
-      <div
-        className="px-6 py-2.5 flex items-center gap-4 shrink-0"
-        style={{ borderBottom: '1px solid rgba(0,212,255,0.08)', background: 'rgba(0,15,30,0.45)' }}
-      >
+      <div className="px-6 py-2.5 flex items-center gap-4 shrink-0" style={{ borderBottom: '1px solid rgba(0,212,255,0.08)', background: 'rgba(0,15,30,0.45)' }}>
         <Avatar status={isSpeaking ? 'responding' : 'idle'} isSpeaking={isSpeaking} amplitude={amplitude} size={56} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold" style={{ color: isSpeaking ? '#00ff9d' : '#00d4ff' }}>
-            {playing ? 'O Detetive está explicando...' : done ? 'Explicação concluída!' : 'Preparando...'}
+          <p className="text-sm lg:text-base font-semibold" style={{ color: isSpeaking ? '#00ff9d' : '#00d4ff' }}>
+            {done ? 'Casos encerrados!' : revealed ? 'Veredito do Detetive' : canVote ? 'A IA acertou ou errou?' : 'O Detetive está lendo o caso...'}
           </p>
-          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-            {currentIndex >= 0 ? `Erro ${currentIndex + 1} de ${AI_ERROR_EXAMPLES.length}` : done ? 'Toque em continuar para a próxima fase' : 'Introdução'}
+          <p className="text-xs lg:text-sm" style={{ color: 'var(--text-muted)' }}>
+            A IA ajuda muito, mas nem sempre acerta.
           </p>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-5">
-        {/* Error cards */}
-        <div className="space-y-3">
-          {AI_ERROR_EXAMPLES.map((ex, i) => {
-            const isOpen = opened.has(ex.id);
-            const isCurrent = currentIndex === i;
-            return (
-              <motion.div
-                key={ex.id}
-                ref={(el) => { cardRefs.current[i] = el; }}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0, scale: isCurrent ? 1.01 : 1 }}
-                className="rounded-xl overflow-hidden"
-                style={{
-                  border: `1px solid ${isCurrent ? ex.color : isOpen ? ex.color + '55' : 'rgba(0,212,255,0.12)'}`,
-                  background: isOpen ? `${ex.color}08` : 'rgba(0,15,30,0.4)',
-                  boxShadow: isCurrent ? `0 0 16px ${ex.color}55` : 'none',
-                }}
-              >
-                <button
-                  className="w-full p-4 flex items-center gap-3 text-left"
-                  onClick={() => {
-                    setOpened((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(ex.id)) next.delete(ex.id); else next.add(ex.id);
-                      return next;
-                    });
-                    grantBadge('ai-errors');
-                  }}
+      {/* Conteúdo */}
+      <div className="flex-1 overflow-y-auto p-5 lg:p-10 flex flex-col items-center justify-center">
+        {done ? (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-2xl">
+            <div className="text-6xl lg:text-7xl mb-4">🤖</div>
+            <h3 className="text-2xl lg:text-4xl font-bold mb-3" style={{ color: '#00d4ff' }}>Investigação concluída!</h3>
+            <p className="text-base lg:text-xl" style={{ color: 'var(--text-secondary)' }}>
+              A IA é uma ótima ajudante, mas não substitui o seu pensamento. Sempre confira o que ela diz. Continue pelo celular.
+            </p>
+          </motion.div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={caseIndex}
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
+              className="w-full max-w-3xl flex flex-col items-center gap-5"
+            >
+              <p className="text-xs lg:text-sm uppercase tracking-[0.2em]" style={{ color: 'rgba(0,212,255,0.7)' }}>
+                Caso {caseIndex + 1} de {total}
+              </p>
+
+              {/* Pergunta */}
+              <div className="w-full flex justify-end">
+                <div
+                  className="px-5 py-3 rounded-2xl text-base lg:text-xl max-w-[80%]"
+                  style={{ background: 'rgba(0,100,255,0.22)', border: '1px solid rgba(0,100,255,0.4)', color: 'var(--text-primary)', borderBottomRightRadius: 4 }}
                 >
-                  <span className="text-2xl">{CATEGORY_ICONS[ex.category] || '⚡'}</span>
-                  <div className="flex-1">
-                    <p className="text-xs font-bold tracking-wider" style={{ color: ex.color }}>
-                      {ex.category.toUpperCase()}
-                    </p>
-                    <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      {ex.question}
-                    </p>
+                  {current.question}
+                </div>
+              </div>
+
+              {/* Resposta da IA */}
+              <div className="w-full flex gap-3 items-start">
+                <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center shrink-0 text-xl" style={{ background: 'rgba(0,100,200,0.3)', border: '1px solid #0066ff55' }}>
+                  🤖
+                </div>
+                <div
+                  className="px-5 py-4 rounded-2xl text-base lg:text-2xl leading-relaxed"
+                  style={{ background: 'rgba(0,30,60,0.6)', border: '1px solid rgba(0,212,255,0.2)', color: 'var(--text-primary)', borderBottomLeftRadius: 4 }}
+                >
+                  {current.answer}
+                </div>
+              </div>
+
+              {/* Reveal */}
+              {revealed && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  className="w-full rounded-2xl p-5 lg:p-7 flex flex-col gap-2"
+                  style={{ background: `${current.color}12`, border: `1px solid ${current.color}55` }}
+                >
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-2xl lg:text-3xl">{current.aiCorrect ? '✅' : '❌'}</span>
+                    <span className="text-lg lg:text-2xl font-bold" style={{ color: current.color }}>
+                      A IA {current.aiCorrect ? 'acertou' : 'errou'} — {current.tag}
+                    </span>
+                    <span className="text-sm lg:text-lg font-semibold ml-auto" style={{ color: isCorrect ? '#00dd44' : '#ffaa00' }}>
+                      {isCorrect ? 'Você acertou o veredito! 🎉' : 'Olho vivo da próxima!'}
+                    </span>
                   </div>
-                  <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                      <path d="M6 9l6 6 6-6" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </motion.div>
-                </button>
+                  <p className="text-sm lg:text-lg" style={{ color: 'var(--text-secondary)' }}>{current.explanation}</p>
+                </motion.div>
+              )}
 
-                <AnimatePresence>
-                  {isOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.25 }}
-                      style={{ overflow: 'hidden' }}
-                    >
-                      <div className="px-4 pb-4 space-y-3 pt-1">
-                        <div className="p-3 rounded-xl" style={{ background: 'rgba(255,51,68,0.1)', border: '1px solid rgba(255,51,68,0.25)' }}>
-                          <p className="text-xs font-bold mb-1" style={{ color: '#ff3344' }}>O que a IA respondeu (ERRADO):</p>
-                          <p className="text-sm italic" style={{ color: 'var(--text-secondary)' }}>&quot;{ex.wrongAnswer}&quot;</p>
-                        </div>
-                        <div className="p-3 rounded-xl" style={{ background: 'rgba(0,221,68,0.08)', border: '1px solid rgba(0,221,68,0.2)' }}>
-                          <p className="text-xs font-bold mb-1" style={{ color: '#00dd44' }}>O que é correto:</p>
-                          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{ex.correctAnswer}</p>
-                        </div>
-                        <div className="p-3 rounded-xl" style={{ background: 'rgba(0,50,80,0.3)', border: '1px solid rgba(0,212,255,0.15)' }}>
-                          <p className="text-xs font-bold mb-1" style={{ color: '#00d4ff' }}>Por que isso acontece:</p>
-                          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{ex.explanation}</p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Avançar na jornada */}
-      <div
-        className="px-6 py-3 flex items-center justify-between shrink-0"
-        style={{ borderTop: '1px solid rgba(0,212,255,0.1)', background: 'rgba(3,7,18,0.6)' }}
-      >
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          {done ? 'Pronto para a próxima fase!' : 'O Detetive está explicando...'}
-        </p>
-        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: '#00d4ff' }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" />
-            <path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          Continue no seu celular
-        </div>
+              <p className="text-sm lg:text-base font-semibold flex items-center gap-2" style={{ color: '#00d4ff' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" />
+                  <path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                {revealed
+                  ? (caseIndex < total - 1 ? 'Toque em "Próximo caso" no celular' : 'Toque em "Concluir" no celular')
+                  : canVote ? 'Dê o seu veredito no celular' : 'Aguarde o Detetive ler o caso...'}
+              </p>
+            </motion.div>
+          </AnimatePresence>
+        )}
       </div>
     </div>
   );

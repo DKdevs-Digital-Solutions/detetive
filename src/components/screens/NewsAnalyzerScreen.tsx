@@ -6,89 +6,110 @@ import { Screen, ConfidenceLevel } from '@/types';
 import TrafficLight from '@/components/ui/TrafficLight';
 import Avatar from '@/components/ui/Avatar';
 import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
-import { useGame } from '@/context/GameProvider';
-import { NEWS_LESSONS, NEWS_INTRO, NEWS_CLOSING } from '@/data/news';
+import { NEWS_LESSONS } from '@/data/news';
 
 interface NewsAnalyzerScreenProps {
   onNavigate: (screen: Screen) => void;
   isOnline?: boolean;
+  controlCode: string; // a votação acontece no celular
 }
 
-const LEVEL_COLOR: Record<ConfidenceLevel, string> = { green: '#00dd44', yellow: '#ffaa00', red: '#ff3344' };
+const LEVELS: { level: ConfidenceLevel; label: string; emoji: string; color: string }[] = [
+  { level: 'green', label: 'Confiável', emoji: '🟢', color: '#00dd44' },
+  { level: 'yellow', label: 'Atenção', emoji: '🟡', color: '#ffaa00' },
+  { level: 'red', label: 'Suspeita', emoji: '🔴', color: '#ff3344' },
+];
 
-export default function NewsAnalyzerScreen({ onNavigate }: NewsAnalyzerScreenProps) {
-  const { grantBadge } = useGame();
-  const { playClip, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
+export default function NewsAnalyzerScreen({ onNavigate, controlCode }: NewsAnalyzerScreenProps) {
+  const { speak, stop: stopSpeaking, isSpeaking, amplitude } = useElevenLabsSpeech();
 
-  const [revealed, setRevealed] = useState<Set<number>>(new Set());
-  const [currentIndex, setCurrentIndex] = useState(-1);
-  const [playing, setPlaying] = useState(false);
+  const total = NEWS_LESSONS.length;
+  const [caseIndex, setCaseIndex] = useState(0);
+  const [canVote, setCanVote] = useState(false);
+  const [selected, setSelected] = useState<ConfidenceLevel | null>(null);
+  const [revealed, setRevealed] = useState(false);
   const [done, setDone] = useState(false);
 
-  const playingRef = useRef(false);
-  const runIdRef = useRef(0);
-  const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const playClipRef = useRef(playClip);
-  useEffect(() => { playClipRef.current = playClip; }, [playClip]);
+  const current = NEWS_LESSONS[caseIndex];
+  const isCorrect = revealed && selected === current.level;
 
-  const speakAndWait = (id: string, text: string, runId: number) =>
-    new Promise<void>((resolve) => {
-      if (!playingRef.current || runId !== runIdRef.current) { resolve(); return; }
-      let completed = false;
-      const finish = () => { if (completed) return; completed = true; resolve(); };
-      playClipRef.current(id, text, finish);
-    });
+  const speakRef = useRef(speak);
+  useEffect(() => { speakRef.current = speak; }, [speak]);
+  const spokenRef = useRef(-1);
 
-  const startNarration = async () => {
-    const runId = runIdRef.current + 1;
-    runIdRef.current = runId;
-    playingRef.current = true;
-    setPlaying(true);
-    setDone(false);
-    setRevealed(new Set());
-    setCurrentIndex(-1);
-    stopSpeaking();
-    grantBadge('news');
+  // Lê o caso atual (Detetive); libera o voto ao terminar de ler.
+  useEffect(() => {
+    if (done) return;
+    if (spokenRef.current === caseIndex) return;
+    spokenRef.current = caseIndex;
+    setSelected(null);
+    setRevealed(false);
+    setCanVote(false);
+    const c = NEWS_LESSONS[caseIndex];
+    let unlocked = false;
+    const unlock = () => { if (!unlocked) { unlocked = true; setCanVote(true); } };
+    speakRef.current(`Caso ${caseIndex + 1}. ${c.headline}. O que você acha: confiável, atenção, ou suspeita?`, unlock);
+    const safety = setTimeout(unlock, 14000);
+    return () => clearTimeout(safety);
+  }, [caseIndex, done]);
 
-    await speakAndWait('news-intro', NEWS_INTRO, runId);
-    if (!playingRef.current || runId !== runIdRef.current) return;
+  // Para a fala ao sair da fase.
+  useEffect(() => () => { stopSpeaking(); }, [stopSpeaking]);
 
-    for (let i = 0; i < NEWS_LESSONS.length; i += 1) {
-      if (!playingRef.current || runId !== runIdRef.current) return;
-      setCurrentIndex(i);
-      setRevealed((prev) => { const next = new Set(prev); next.add(i); return next; });
-      cardRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await speakAndWait(`news-${i}`, NEWS_LESSONS[i].speech, runId);
-      if (!playingRef.current || runId !== runIdRef.current) return;
-      // Pausa para ler as pistas com calma antes da próxima.
-      await new Promise<void>((r) => setTimeout(r, 3500));
-    }
-
-    if (!playingRef.current || runId !== runIdRef.current) return;
-    setCurrentIndex(-1);
-    await speakAndWait('news-closing', NEWS_CLOSING, runId);
-
-    if (!playingRef.current || runId !== runIdRef.current) return;
-    playingRef.current = false;
-    setPlaying(false);
-    setDone(true);
-  };
-
-  // Avisa o controle remoto: só libera "Continuar" quando a lição termina.
+  // Avisa o controle: só libera "Continuar" quando todos os casos foram resolvidos.
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('detetive:phase-ready', { detail: { ready: done } }));
   }, [done]);
 
+  const handleVote = (level: ConfidenceLevel) => {
+    if (!canVote || selected !== null || done) return;
+    setSelected(level);
+    setRevealed(true);
+    stopSpeaking();
+    const acerto = level === current.level;
+    speakRef.current(`${acerto ? 'Boa, detetive!' : 'Quase!'} ${current.speech}`);
+  };
+
+  const handleNext = () => {
+    if (!revealed) return;
+    if (caseIndex < total - 1) setCaseIndex((i) => i + 1);
+    else { stopSpeaking(); setDone(true); }
+  };
+
+  // Espelha o estado para o celular (quem vota).
   useEffect(() => {
-    startTimerRef.current = setTimeout(() => { void startNarration(); }, 700);
-    return () => {
-      if (startTimerRef.current) clearTimeout(startTimerRef.current);
-      runIdRef.current += 1;
-      playingRef.current = false;
-      stopSpeaking();
+    if (!controlCode) return;
+    const payload = {
+      caseIndex,
+      total,
+      canVote,
+      selected,
+      revealed,
+      correctLevel: revealed ? current.level : null,
+      done,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetch('/api/control/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: controlCode, command: { from: 'display', type: 'news-state', news: payload } }),
+    }).catch(() => {});
+  }, [controlCode, caseIndex, total, canVote, selected, revealed, done, current.level]);
+
+  // Recebe as ações do celular (votar, próximo caso).
+  const actionsRef = useRef<(a: string, level?: ConfidenceLevel) => void>(() => {});
+  useEffect(() => {
+    actionsRef.current = (action: string, level?: ConfidenceLevel) => {
+      if (action === 'vote' && level) handleVote(level);
+      else if (action === 'next') handleNext();
+    };
+  });
+  useEffect(() => {
+    const onNews = (e: Event) => {
+      const d = (e as CustomEvent<{ action?: string; level?: ConfidenceLevel }>).detail || {};
+      actionsRef.current(d.action || '', d.level);
+    };
+    window.addEventListener('detetive:news', onNews);
+    return () => window.removeEventListener('detetive:news', onNews);
   }, []);
 
   return (
@@ -100,89 +121,108 @@ export default function NewsAnalyzerScreen({ onNavigate }: NewsAnalyzerScreenPro
             <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <div>
-          <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Como farejar uma notícia</h2>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>O semáforo da confiança, com o Detetive</p>
+        <div className="flex-1">
+          <h2 className="text-base lg:text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Investigue a notícia</h2>
+          <p className="text-xs lg:text-sm" style={{ color: 'var(--text-muted)' }}>Você é o detetive — dê o seu veredito pelo celular</p>
         </div>
+        {!done && (
+          <span className="text-sm lg:text-base font-mono" style={{ color: '#00d4ff' }}>Caso {caseIndex + 1}/{total}</span>
+        )}
       </div>
 
       {/* Barra do narrador */}
-      <div
-        className="px-6 py-2.5 flex items-center gap-4 shrink-0"
-        style={{ borderBottom: '1px solid rgba(0,212,255,0.08)', background: 'rgba(0,15,30,0.45)' }}
-      >
+      <div className="px-6 py-2.5 flex items-center gap-4 shrink-0" style={{ borderBottom: '1px solid rgba(0,212,255,0.08)', background: 'rgba(0,15,30,0.45)' }}>
         <Avatar status={isSpeaking ? 'responding' : 'idle'} isSpeaking={isSpeaking} amplitude={amplitude} size={56} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold" style={{ color: isSpeaking ? '#00ff9d' : '#00d4ff' }}>
-            {playing ? 'O Detetive está explicando...' : done ? 'Lição concluída!' : 'Preparando...'}
+          <p className="text-sm lg:text-base font-semibold" style={{ color: isSpeaking ? '#00ff9d' : '#00d4ff' }}>
+            {done ? 'Casos encerrados!' : revealed ? 'Veredito do Detetive' : canVote ? 'Qual o seu veredito?' : 'O Detetive está lendo o caso...'}
           </p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-xs lg:text-sm" style={{ color: 'var(--text-muted)' }}>
             🟢 confiável · 🟡 atenção · 🔴 suspeito
           </p>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-5 space-y-3">
-        {NEWS_LESSONS.map((l, i) => {
-          const show = revealed.has(i);
-          const isCurrent = currentIndex === i;
-          const color = LEVEL_COLOR[l.level];
-          return (
-            <div
-              key={i}
-              ref={(el) => { cardRefs.current[i] = el; }}
-              className="rounded-xl p-4"
-              style={{
-                border: `1px solid ${isCurrent ? color : show ? color + '55' : 'rgba(0,212,255,0.12)'}`,
-                background: show ? `${color}0c` : 'rgba(0,15,30,0.4)',
-                boxShadow: isCurrent ? `0 0 16px ${color}55` : 'none',
-                opacity: show ? 1 : 0.55,
-              }}
+      {/* Conteúdo */}
+      <div className="flex-1 overflow-y-auto p-5 lg:p-10 flex flex-col items-center justify-center">
+        {done ? (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-2xl">
+            <div className="text-6xl lg:text-7xl mb-4">🕵️</div>
+            <h3 className="text-2xl lg:text-4xl font-bold mb-3" style={{ color: '#00d4ff' }}>Casos resolvidos!</h3>
+            <p className="text-base lg:text-xl" style={{ color: 'var(--text-secondary)' }}>
+              Você farejou as pistas: fonte, data e exageros. Continue a investigação pelo seu celular.
+            </p>
+          </motion.div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={caseIndex}
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
+              className="w-full max-w-3xl flex flex-col items-center gap-6"
             >
-              <div className="flex items-start gap-3">
-                {show ? <TrafficLight level={l.level} size="md" /> : (
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg" style={{ background: 'rgba(0,30,60,0.6)', border: '1px solid rgba(0,212,255,0.2)' }}>?</div>
-                )}
-                <div className="flex-1">
-                  <p className="text-sm font-semibold leading-snug" style={{ color: 'var(--text-primary)' }}>
-                    &quot;{l.headline}&quot;
-                  </p>
-                  <AnimatePresence>
-                    {show && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ overflow: 'hidden' }}>
-                        <p className="text-xs font-bold mt-2" style={{ color }}>{l.verdict}</p>
-                        <ul className="mt-1 space-y-0.5">
-                          {l.clues.map((c, k) => (
-                            <li key={k} className="text-xs flex gap-2" style={{ color: 'var(--text-secondary)' }}>
-                              <span style={{ color }}>•</span> {c}
-                            </li>
-                          ))}
-                        </ul>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+              {/* Manchete do caso */}
+              <div
+                className="w-full rounded-2xl p-6 lg:p-9 text-center"
+                style={{ background: 'rgba(0,20,40,0.5)', border: '1px solid rgba(0,212,255,0.2)' }}
+              >
+                <p className="text-xs lg:text-sm uppercase tracking-[0.2em] mb-3" style={{ color: 'rgba(0,212,255,0.7)' }}>
+                  Caso {caseIndex + 1} de {total}
+                </p>
+                <p className="text-xl lg:text-3xl font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
+                  &ldquo;{current.headline}&rdquo;
+                </p>
               </div>
-            </div>
-          );
-        })}
-      </div>
 
-      {/* Avançar na jornada */}
-      <div
-        className="px-6 py-3 flex items-center justify-between shrink-0"
-        style={{ borderTop: '1px solid rgba(0,212,255,0.1)', background: 'rgba(3,7,18,0.6)' }}
-      >
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          {done ? 'Pronto para a próxima fase!' : 'O Detetive está explicando...'}
-        </p>
-        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: '#00d4ff' }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" />
-            <path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          Continue no seu celular
-        </div>
+              {!revealed ? (
+                /* Aguardando o voto (no celular) — legenda dos sinais */
+                <div className="flex items-center gap-4 lg:gap-6">
+                  {LEVELS.map((l) => (
+                    <div key={l.level} className="flex flex-col items-center gap-1" style={{ opacity: canVote ? 1 : 0.45 }}>
+                      <span className="text-3xl lg:text-4xl">{l.emoji}</span>
+                      <span className="text-xs lg:text-base font-semibold" style={{ color: l.color }}>{l.label}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Veredito revelado */
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  className="w-full rounded-2xl p-6 lg:p-8 flex flex-col items-center gap-4"
+                  style={{ background: `${LEVELS.find((l) => l.level === current.level)?.color}12`, border: `1px solid ${LEVELS.find((l) => l.level === current.level)?.color}55` }}
+                >
+                  <div className="flex items-center gap-4">
+                    <TrafficLight level={current.level} size="md" />
+                    <div className="text-left">
+                      <p className="text-lg lg:text-2xl font-bold" style={{ color: LEVELS.find((l) => l.level === current.level)?.color }}>
+                        {current.verdict}
+                      </p>
+                      <p className="text-sm lg:text-lg font-semibold" style={{ color: isCorrect ? '#00dd44' : '#ffaa00' }}>
+                        {isCorrect ? 'Você acertou o veredito! 🎉' : 'Olho vivo da próxima vez!'}
+                      </p>
+                    </div>
+                  </div>
+                  <ul className="w-full max-w-xl space-y-1.5">
+                    {current.clues.map((c, k) => (
+                      <li key={k} className="text-sm lg:text-lg flex gap-2" style={{ color: 'var(--text-secondary)' }}>
+                        <span style={{ color: LEVELS.find((l) => l.level === current.level)?.color }}>•</span> {c}
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              )}
+
+              <p className="text-sm lg:text-base font-semibold flex items-center gap-2" style={{ color: '#00d4ff' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" />
+                  <path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                {revealed
+                  ? (caseIndex < total - 1 ? 'Toque em "Próximo caso" no celular' : 'Toque em "Concluir" no celular')
+                  : canVote ? 'Dê o seu veredito no celular' : 'Aguarde o Detetive ler o caso...'}
+              </p>
+            </motion.div>
+          </AnimatePresence>
+        )}
       </div>
     </div>
   );

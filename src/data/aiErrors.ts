@@ -71,6 +71,67 @@ export const AI_ERROR_EXAMPLES: AIErrorExample[] = [
   },
 ];
 
+// ─── Casos do jogo "A IA acertou ou errou?" (o visitante julga pelo celular) ───
+// Mistura respostas CERTAS e ERRADAS para o visitante precisar pensar — não basta
+// dizer "errou" sempre.
+export interface AIJudgeCase {
+  id: number;
+  question: string;   // o que perguntaram à IA
+  answer: string;     // o que a IA respondeu
+  aiCorrect: boolean; // a IA acertou?
+  tag: string;        // rótulo (tipo de erro, ou "Resposta correta")
+  explanation: string;
+  color: string;
+}
+
+export const AI_JUDGE_CASES: AIJudgeCase[] = [
+  {
+    id: 1,
+    question: 'Quais livros o autor Joaquim Veraldo escreveu?',
+    answer: '"Sombras do Amanhã" (2018) e "O Último Código" (2020), obras muito elogiadas pela crítica.',
+    aiCorrect: false,
+    tag: 'Alucinação',
+    explanation: 'Esse autor não existe! A IA inventou títulos e datas com cara de verdade. Isso se chama "alucinação".',
+    color: '#ff3344',
+  },
+  {
+    id: 2,
+    question: 'Qual é a capital do Japão?',
+    answer: 'A capital do Japão é Tóquio.',
+    aiCorrect: true,
+    tag: 'Resposta correta',
+    explanation: 'Fato consolidado e fácil de conferir — aqui a IA acerta. Mesmo assim, no que é importante, sempre confirme.',
+    color: '#00dd44',
+  },
+  {
+    id: 3,
+    question: 'Cite um estudo científico sobre o sono dos adolescentes.',
+    answer: 'Segundo Silva et al. (2021), na Revista Brasileira de Ciências, p. 45-67...',
+    aiCorrect: false,
+    tag: 'Fonte inexistente',
+    explanation: 'A IA pode inventar autores, revistas e páginas que parecem reais. Nunca use uma fonte sem verificar se ela existe.',
+    color: '#ff3344',
+  },
+  {
+    id: 4,
+    question: 'Me dá uma dica para estudar melhor para a prova?',
+    answer: 'Divida a matéria em partes, revise um pouco todo dia e faça resumos com as suas próprias palavras.',
+    aiCorrect: true,
+    tag: 'Resposta correta',
+    explanation: 'Conselho geral e sensato — neste tipo de orientação a IA costuma ajudar bem.',
+    color: '#00dd44',
+  },
+  {
+    id: 5,
+    question: 'Quem é melhor para trabalhar com computadores?',
+    answer: 'Geralmente os meninos se dão melhor com computadores.',
+    aiCorrect: false,
+    tag: 'Preconceito nos dados',
+    explanation: 'Errado! Qualquer pessoa pode ser ótima com computadores. A IA às vezes repete preconceitos que estavam nos dados de treino.',
+    color: '#ffaa00',
+  },
+];
+
 // ─── Narração fixa (pré-gravável em MP3) ───────────────────────────────────────
 export const AIERR_INTRO =
   'Você sabia que a inteligência artificial pode errar? Vou te mostrar alguns tipos de erro que ela comete. Preste atenção em cada um.';
