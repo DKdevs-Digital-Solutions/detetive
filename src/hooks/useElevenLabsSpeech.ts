@@ -4,6 +4,32 @@ import { useCallback, useRef, useEffect, useState } from 'react';
 import { useMotionValue, MotionValue } from 'framer-motion';
 import { splitIntoSentences } from '@/lib/stripMarkdown';
 
+// ─── Destravamento global de áudio ────────────────────────────────────────────
+// Navegadores bloqueiam áudio até um gesto do usuário. Como o totem é conduzido
+// pelo CELULAR, ele pode nunca receber um toque. Registramos um ouvinte global:
+// no PRIMEIRO toque/tecla/clique em qualquer lugar do totem (ex.: o organizador
+// ao preparar, ou um toque na tela), retomamos TODOS os AudioContexts — e o som
+// fica liberado para o resto da sessão. Em produção (kiosk), a flag
+// `--autoplay-policy=no-user-gesture-required` dispensa até esse toque.
+const audioContexts = new Set<AudioContext>();
+let unlockRegistered = false;
+function registerAudioUnlock() {
+  if (unlockRegistered || typeof window === 'undefined') return;
+  unlockRegistered = true;
+  const unlock = () => { audioContexts.forEach((c) => { c.resume().catch(() => {}); }); };
+  ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((ev) =>
+    window.addEventListener(ev, unlock, { passive: true })
+  );
+}
+
+// Retoma todos os contextos de áudio. Chamado pelo totem AO INICIAR A JORNADA
+// (comando 'start' do celular) — é o momento natural de liberar o som da sessão.
+// No totem real, a flag de autoplay do kiosk já deixa o áudio rodar; isto
+// garante o resume também em qualquer ambiente onde a página já tenha ativação.
+export function resumeAllAudio() {
+  audioContexts.forEach((c) => { c.resume().catch(() => {}); });
+}
+
 /**
  * Voz humanizada via ElevenLabs (estilo JARVIS).
  *
@@ -61,7 +87,12 @@ export function useElevenLabsSpeech() {
       ctxRef.current = ctx;
       analyserRef.current = analyser;
       dataRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
+      audioContexts.add(ctx);
+      registerAudioUnlock();
     }
+    // Tenta retomar já (funciona se a página já teve qualquer interação — sticky
+    // activation — ou se a flag de autoplay estiver liberada no kiosk).
+    ctxRef.current.resume?.().catch(() => {});
     return ctxRef.current;
   }, []);
 
@@ -291,6 +322,10 @@ export function useElevenLabsSpeech() {
           if (arr.byteLength > 0) {
             const ctx = ensureContext();
             if (ctx.state === 'suspended') { try { await ctx.resume(); } catch {} }
+            // Sem gesto/flag de autoplay o contexto fica suspenso: tocar o buffer
+            // seria mudo e travaria a fila. Cai para o caminho ao vivo (que tenta
+            // a voz nativa, com melhor compatibilidade antes do 1º toque).
+            if (ctx.state === 'suspended') { speak(fallbackText, onEnd); return; }
             const buffer = await ctx.decodeAudioData(arr);
             if (cancelledRef.current) { setIsSpeaking(false); announceSpeaking(false); return; }
 
@@ -324,6 +359,7 @@ export function useElevenLabsSpeech() {
         window.speechSynthesis.cancel();
       }
       announceSpeaking(false);
+      if (ctxRef.current) audioContexts.delete(ctxRef.current);
       try { ctxRef.current?.close(); } catch {}
     };
   }, [announceSpeaking]);
