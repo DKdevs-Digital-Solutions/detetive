@@ -15,7 +15,7 @@ import StatusBar from '@/components/ui/StatusBar';
 import JourneyProgress from '@/components/ui/JourneyProgress';
 import SealCelebration from '@/components/ui/SealCelebration';
 import SettingsMenu from '@/components/ui/SettingsMenu';
-import { useElevenLabsSpeech } from '@/hooks/useElevenLabsSpeech';
+import { useElevenLabsSpeech, resumeAllAudio } from '@/hooks/useElevenLabsSpeech';
 import { GameProvider, useGame } from '@/context/GameProvider';
 import { SettingsProvider, useSettings } from '@/context/SettingsProvider';
 import { JOURNEY } from '@/lib/game';
@@ -81,6 +81,33 @@ function AppShell() {
   // Controle conectado? Ao parear um celular, escondemos o QR do totem (evita
   // outro acesso); o QR reaparece só em nova sessão.
   const [controllerConnected, setControllerConnected] = useState(false);
+
+  // ─── Destravamento de áudio do display ────────────────────────────────────────
+  // O totem é hands-free (controlado pelo celular). Sob a flag de kiosk
+  // (--autoplay-policy=no-user-gesture-required) o som já toca sozinho. Quando NÃO
+  // há a flag, o navegador exige um gesto na página: a sonda detecta isso e mostra
+  // um botão de setup ("Ativar som") que o organizador toca UMA vez. null = ainda
+  // verificando; true = liberado (sem botão); false = precisa de um toque.
+  const [audioArmed, setAudioArmed] = useState<boolean | null>(null);
+  useEffect(() => {
+    try {
+      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AC) { setAudioArmed(true); return; }
+      const probe = new AC();
+      setAudioArmed(probe.state === 'running');
+      probe.close?.();
+    } catch { setAudioArmed(true); }
+  }, []);
+  useEffect(() => {
+    if (audioArmed !== false) return;
+    const arm = () => { resumeAllAudio(); setAudioArmed(true); };
+    window.addEventListener('pointerdown', arm, { once: true });
+    window.addEventListener('keydown', arm, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', arm);
+      window.removeEventListener('keydown', arm);
+    };
+  }, [audioArmed]);
 
   // Estado global de fala: qualquer tela pode bloquear o reconhecimento de ordens
   // enquanto o Detetive estiver lendo ou respondendo.
@@ -208,6 +235,9 @@ function AppShell() {
   // O controlador (/controle?code=...) acompanha a jornada e envia ações sequenciais.
   const handleControl = useCallback((cmd: { type?: string; screen?: Screen; channel?: string; name?: string; idx?: number; level?: string; value?: boolean }) => {
     window.dispatchEvent(new Event('detetive:keepalive'));
+    // O 'start' vem de um toque no celular: é o momento de liberar o áudio do
+    // display (sob a flag de autoplay do kiosk, ou se a página já teve ativação).
+    resumeAllAudio();
     if (cmd.type === 'start') {
       startJourney();
     } else if (cmd.type === 'advance') {
@@ -340,6 +370,21 @@ function AppShell() {
 
       {/* Menu de configuração (pressionar o logo por 3 segundos) */}
       <SettingsMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={navigate} />
+
+      {/* Setup: liberar o som quando o navegador bloqueia o autoplay (sem a flag de kiosk) */}
+      {audioArmed === false && (
+        <button
+          onClick={() => { resumeAllAudio(); setAudioArmed(true); }}
+          className="fixed bottom-4 right-4 z-[80] flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold"
+          style={{ background: 'linear-gradient(135deg,#00d4ff,#0066ff)', color: '#fff', boxShadow: '0 0 22px rgba(0,212,255,0.5)' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M11 5L6 9H2v6h4l5 4V5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          Ativar som do Detetive
+        </button>
+      )}
     </main>
   );
 }
